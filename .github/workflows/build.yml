@@ -33,12 +33,16 @@ jobs:
       - name: Check Flutter version
         run: flutter --version
 
-      # DELETE existing android folder and recreate with v2 embedding
-      - name: Recreate Android project with v2 embedding
+      # DELETE everything and recreate fresh
+      - name: Complete reset and recreate project
         run: |
-          rm -rf android
+          # Remove everything except lib, assets, and pubspec
+          find . -maxdepth 1 ! -name '.' ! -name '..' ! -name 'lib' ! -name 'assets' ! -name 'pubspec.yaml' ! -name '.git' ! -name '.github' -exec rm -rf {} +
+          
+          # Create fresh Flutter project with v2 embedding
           flutter create --platforms=android --org com.example .
-          echo "✅ Android project recreated with v2 embedding"
+          
+          echo "✅ Fresh project created"
 
       - name: Create Cloudinary config
         run: |
@@ -61,82 +65,125 @@ jobs:
       - name: Create asset directories
         run: |
           mkdir -p assets/images assets/emojis assets/audio
+          # Create a placeholder logo if missing
+          if [ ! -f assets/images/logo.png ]; then
+            echo "Creating placeholder logo..."
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/images/logo.png
+          fi
 
-      - name: Update pubspec for compatibility
+      - name: Fix pubspec.yaml
         run: |
-          sed -i 's/sdk: '\''>=3.4.0 <4.0.0'\''/sdk: '\''>=3.0.0 <4.0.0'\''/g' pubspec.yaml
-          sed -i 's/emoji_picker_flutter: ^3.0.0/emoji_picker_flutter: ^2.0.0/g' pubspec.yaml
-          sed -i 's/shared_preferences: ^2.3.4/shared_preferences: ^2.2.2/g' pubspec.yaml
-          sed -i 's/intl: ^0.19.0/intl: ^0.18.1/g' pubspec.yaml
+          cat > pubspec.yaml << 'EOF'
+          name: aurachat
+          description: AURA Chat App
+          publish_to: 'none'
 
-      - name: Fix MainActivity for v2 embedding
-        run: |
-          cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
-          package com.example.aurachat
+          version: 3.0.0+1
 
-          import io.flutter.embedding.android.FlutterActivity
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
 
-          class MainActivity: FlutterActivity()
+          dependencies:
+            flutter:
+              sdk: flutter
+
+            # Firebase
+            firebase_core: ^2.24.2
+            firebase_auth: ^4.16.0
+            cloud_firestore: ^4.14.0
+            firebase_database: ^10.3.0
+            firebase_storage: ^11.2.5
+            firebase_messaging: ^14.6.5
+            cloudinary_public: ^0.23.1
+
+            # State Management
+            provider: ^6.1.2
+            google_generative_ai: ^0.4.6
+
+            # UI & System
+            cupertino_icons: ^1.0.8
+            image_picker: ^1.0.7
+            intl: ^0.18.1
+            google_fonts: ^6.2.1
+            cached_network_image: ^3.3.0
+            photo_view: ^0.14.0
+            share_plus: ^7.2.2
+            uni_links: ^0.5.1
+            crypto: ^3.0.3
+
+            # Auth & Security
+            local_auth: ^2.1.8
+
+            # Phone & Input
+            intl_phone_field: ^3.2.0
+
+            # http request
+            http: ^1.2.2
+
+            # Chat & Media
+            uuid: ^4.5.0
+            emoji_picker_flutter: ^2.0.0
+            file_picker: ^6.1.1
+            path_provider: ^2.1.0
+            open_filex: ^4.3.4
+            just_audio: ^0.9.36
+            record: ^5.0.0
+            video_player: ^2.8.1
+            dio: ^5.4.0
+            path: ^1.8.3
+            url_launcher: ^6.2.1
+
+            # Calls
+            agora_rtc_engine: ^6.3.0
+            permission_handler: ^11.0.1
+
+            # Storage & Preferences
+            shared_preferences: ^2.2.2
+
+            # Notifications
+            flutter_local_notifications: ^17.0.0
+
+            # Connectivity
+            connectivity_plus: ^5.0.0
+
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^4.0.0
+            flutter_launcher_icons: ^0.13.1
+
+          flutter:
+            uses-material-design: true
+
+            assets:
+              - assets/images/
+              - assets/emojis/
+              - assets/audio/
+              - assets/audio/ringtone_ambition.mp3
+              - assets/audio/ringtone_phonk.mp3
+              - assets/audio/ringtone_fadded.mp3
+              - assets/audio/ringtone_pop.mp3
+
+          flutter_launcher_icons:
+            android: true
+            ios: false
+            image_path: "assets/images/logo.png"
+            adaptive_icon_background: "#0A0A0F"
+            adaptive_icon_foreground: "assets/images/logo.png"
+            min_sdk_android: 21
           EOF
-          echo "✅ MainActivity fixed"
 
-      - name: Fix AndroidManifest.xml
+      - name: Fix Gradle wrapper
         run: |
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-                  android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.BLUETOOTH" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              
-              <application
-                  android:label="AURA Chat"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher"
-                  android:allowBackup="true"
-                  android:largeHeap="true"
-                  android:hardwareAccelerated="true"
-                  android:requestLegacyExternalStorage="true">
-                  
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                          android:name="io.flutter.embedding.android.NormalTheme"
-                          android:resource="@style/NormalTheme"
-                      />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
           EOF
-          echo "✅ AndroidManifest.xml fixed"
 
-      - name: Fix project-level build.gradle
+      - name: Fix project build.gradle
         run: |
           cat > android/build.gradle << 'EOF'
           buildscript {
@@ -172,9 +219,8 @@ jobs:
               delete rootProject.buildDir
           }
           EOF
-          echo "✅ project-level build.gradle fixed"
 
-      - name: Fix app/build.gradle
+      - name: Fix app build.gradle
         run: |
           cat > android/app/build.gradle << 'EOF'
           def localProperties = new Properties()
@@ -251,7 +297,6 @@ jobs:
               implementation 'com.google.firebase:firebase-analytics'
           }
           EOF
-          echo "✅ app/build.gradle fixed"
 
       - name: Fix settings.gradle
         run: |
@@ -282,40 +327,14 @@ jobs:
 
           include ":app"
           EOF
-          echo "✅ settings.gradle fixed"
 
-      - name: Copy google-services.json if exists
+      - name: Copy google-services.json
         run: |
           if [ -f google-services.json ]; then
             cp google-services.json android/app/
             echo "✅ google-services.json copied"
           else
-            echo "⚠️ google-services.json not found, creating placeholder..."
-            cat > android/app/google-services.json << 'EOF'
-          {
-            "project_info": {
-              "project_number": "123456789",
-              "project_id": "aurachat-demo"
-            },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:123456789:android:abcdef",
-                  "android_client_info": {
-                    "package_name": "com.example.aurachat"
-                  }
-                },
-                "oauth_client": [],
-                "api_key": [],
-                "services": {
-                  "appinvite_service": {
-                    "other_platform_oauth_client": []
-                  }
-                }
-              }
-            ]
-          }
-          EOF
+            echo "⚠️ google-services.json not found"
           fi
 
       - name: Clean and Get dependencies
@@ -364,11 +383,6 @@ jobs:
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
           }
           EOF
-
-      - name: Update pubspec for compatibility
-        run: |
-          sed -i 's/sdk: '\''>=3.4.0 <4.0.0'\''/sdk: '\''>=3.0.0 <4.0.0'\''/g' pubspec.yaml
-          sed -i 's/emoji_picker_flutter: ^3.0.0/emoji_picker_flutter: ^2.0.0/g' pubspec.yaml
 
       - name: Clean and Get dependencies
         run: |
