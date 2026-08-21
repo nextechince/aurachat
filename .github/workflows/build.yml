@@ -136,22 +136,58 @@ jobs:
           EOF
           echo "✅ AndroidManifest.xml fixed"
 
+      - name: Fix project-level build.gradle
+        run: |
+          cat > android/build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+                  classpath 'com.google.gms:google-services:4.4.0'
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+          echo "✅ project-level build.gradle fixed"
+
       - name: Fix app/build.gradle
         run: |
           cat > android/app/build.gradle << 'EOF'
-          plugins {
-              id "com.android.application"
-              id "kotlin-android"
-              id "dev.flutter.flutter-gradle-plugin"
-              id "com.google.gms.google-services"
-          }
-
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
           if (localPropertiesFile.exists()) {
               localPropertiesFile.withReader('UTF-8') { reader ->
                   localProperties.load(reader)
               }
+          }
+
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
           }
 
           def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
@@ -164,8 +200,11 @@ jobs:
               flutterVersionName = '1.0'
           }
 
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply plugin: 'com.google.gms.google-services'
+
           android {
-              namespace "com.example.aurachat"
               compileSdkVersion 34
               ndkVersion flutter.ndkVersion
 
@@ -206,6 +245,7 @@ jobs:
           }
 
           dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
               implementation 'androidx.multidex:multidex:2.0.1'
               implementation platform('com.google.firebase:firebase-bom:32.7.0')
               implementation 'com.google.firebase:firebase-analytics'
@@ -213,11 +253,69 @@ jobs:
           EOF
           echo "✅ app/build.gradle fixed"
 
+      - name: Fix settings.gradle
+        run: |
+          cat > android/settings.gradle << 'EOF'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+
+              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "8.1.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
+          }
+
+          include ":app"
+          EOF
+          echo "✅ settings.gradle fixed"
+
       - name: Copy google-services.json if exists
         run: |
           if [ -f google-services.json ]; then
             cp google-services.json android/app/
             echo "✅ google-services.json copied"
+          else
+            echo "⚠️ google-services.json not found, creating placeholder..."
+            cat > android/app/google-services.json << 'EOF'
+          {
+            "project_info": {
+              "project_number": "123456789",
+              "project_id": "aurachat-demo"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789:android:abcdef",
+                  "android_client_info": {
+                    "package_name": "com.example.aurachat"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ]
+          }
+          EOF
           fi
 
       - name: Clean and Get dependencies
