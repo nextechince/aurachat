@@ -26,81 +26,11 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.16.9'  # FIX: Use version compatible with all packages
           channel: 'stable'
 
-      - name: Create Android project
-        run: |
-          cp android/app/google-services.json /tmp/google-services.json
-          rm -rf android
-          flutter create . --platforms=android --org com.example
-          mkdir -p android/app
-          cp /tmp/google-services.json android/app/
-          ls -la android/app/google-services.json
-
-      - name: Fix settings.gradle
-        run: |
-          cat > android/settings.gradle << 'EOF'
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
-              }()
-
-              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          plugins {
-              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "7.4.2" apply false
-              id "org.jetbrains.kotlin.android" version "1.8.22" apply false
-              id "com.google.gms.google-services" version "4.3.15" apply false
-          }
-
-          include ":app"
-          EOF
-
-      - name: Fix project-level build.gradle
-        run: |
-          cat > android/build.gradle << 'EOF'
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-      - name: Fix Gradle wrapper
-        run: |
-          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.3-all.zip
-          EOF
+      - name: Check Flutter version
+        run: flutter --version
 
       - name: Create Cloudinary config
         run: |
@@ -120,196 +50,22 @@ jobs:
           }
           EOF
 
-      - name: Fix app build.gradle for ALL phones
-        run: |
-          python3 << 'PYEOF'
-          import re
-
-          with open('android/app/build.gradle', 'r') as f:
-              content = f.read()
-
-          # Pin compileSdk and targetSdk to 34
-          content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 34', content)
-          content = re.sub(r'compileSdkVersion\s+.*', 'compileSdkVersion 34', content)
-          content = re.sub(r'targetSdk\s*=\s*flutter\.targetSdkVersion', 'targetSdk = 34', content)
-          content = re.sub(r'targetSdkVersion\s+.*', 'targetSdkVersion 34', content)
-
-          # Lower minSdk
-          content = content.replace('minSdk = flutter.minSdkVersion', 'minSdk = 21')
-
-          # ABI filters
-          content = content.replace(
-              'defaultConfig {',
-              'defaultConfig {\n        ndk { abiFilters "armeabi-v7a", "arm64-v8a" }'
-          )
-
-          # Firebase plugin
-          if 'com.google.gms.google-services' not in content:
-              content = content.replace(
-                  'plugins {',
-                  'plugins {\n    id "com.google.gms.google-services"'
-              )
-
-          # buildTypes
-          content = re.sub(
-              r'buildTypes\s*\{[^}]*release\s*\{[^}]*\}[^}]*\}',
-              "buildTypes {\n        release {\n            minifyEnabled true\n            shrinkResources true\n            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'\n            signingConfig = signingConfigs.debug\n        }\n    }",
-              content,
-              flags=re.DOTALL
-          )
-
-          with open('android/app/build.gradle', 'w') as f:
-              f.write(content)
-          PYEOF
-
-      - name: Create ProGuard rules
-        run: |
-          cat > android/app/proguard-rules.pro << 'EOF'
-          # Flutter
-          -keep class io.flutter.app.** { *; }
-          -keep class io.flutter.plugin.** { *; }
-          -keep class io.flutter.util.** { *; }
-          -keep class io.flutter.view.** { *; }
-          -keep class io.flutter.** { *; }
-          -keep class io.flutter.plugins.** { *; }
-          -keep class androidx.lifecycle.** { *; }
-
-          # Firebase
-          -keep class com.google.firebase.** { *; }
-          -keep class com.google.android.gms.** { *; }
-
-          # Agora
-          -keep class io.agora.** { *; }
-          -dontwarn io.agora.**
-
-          # Cloudinary
-          -keep class com.cloudinary.** { *; }
-          -dontwarn com.cloudinary.**
-
-          # HTTP clients
-          -keep class okhttp3.** { *; }
-          -keep class retrofit2.** { *; }
-          -dontwarn retrofit2.**
-
-          # Prevent stripping of JSON models
-          -keepclassmembers class * {
-              @com.google.gson.annotations.SerializedName <fields>;
-          }
-
-          # Keep stack traces readable
-          -keepattributes SourceFile,LineNumberTable
-          -renamesourcefileattribute SourceFile
-          EOF
-
-      - name: Create AndroidManifest.xml
-        run: |
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:tools="http://schemas.android.com/tools">
-
-              <uses-sdk tools:overrideLibrary="com.google.firebase.auth" />
-
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.BLUETOOTH" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-                  android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
-              <application
-                  android:label="AURA Chat"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher"
-                  android:allowBackup="true"
-                  android:fullBackupContent="true"
-                  android:largeHeap="true"
-                  android:hardwareAccelerated="true"
-                  android:extractNativeLibs="true">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                        android:name="io.flutter.embedding.android.NormalTheme"
-                        android:resource="@style/NormalTheme"
-                        />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-
-                      <!-- Deep Link: Invitation Links -->
-                      <intent-filter android:autoVerify="true">
-                          <action android:name="android.intent.action.VIEW"/>
-                          <category android:name="android.intent.category.DEFAULT"/>
-                          <category android:name="android.intent.category.BROWSABLE"/>
-                          <data android:scheme="https"
-                                android:host="aurachat.app"
-                                android:pathPrefix="/invite"/>
-                      </intent-filter>
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.VIEW"/>
-                          <category android:name="android.intent.category.DEFAULT"/>
-                          <category android:name="android.intent.category.BROWSABLE"/>
-                          <data android:scheme="aura"
-                                android:host="invite"/>
-                      </intent-filter>
-                  </activity>
-
-                  <!-- Firebase Cloud Messaging Service -->
-                  <service
-                      android:name="com.google.firebase.messaging.FirebaseMessagingService"
-                      android:exported="false">
-                      <intent-filter>
-                          <action android:name="com.google.firebase.MESSAGING_EVENT"/>
-                      </intent-filter>
-                  </service>
-
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-
-                  <meta-data
-                      android:name="com.google.firebase.messaging.default_notification_channel_id"
-                      android:value="aura_chat_channel"/>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Setup MainActivity
-        run: |
-          mkdir -p android/app/src/main/kotlin/com/example/aurachat
-          cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
-          package com.example.aurachat
-          import io.flutter.embedding.android.FlutterFragmentActivity
-          class MainActivity: FlutterFragmentActivity() {}
-          EOF
-
       - name: Create asset directories
         run: |
           mkdir -p assets/images assets/emojis assets/audio
 
-      - name: Get dependencies
-        run: flutter pub get
+      - name: Clean and Get dependencies
+        run: |
+          rm -f pubspec.lock
+          flutter clean
+          flutter pub get
 
-      - name: Generate app icons
-        run: flutter pub run flutter_launcher_icons
+      - name: Fix shared_preferences version conflict
+        run: |
+          # Override shared_preferences to compatible version
+          echo "dependency_overrides:" >> pubspec.yaml
+          echo "  shared_preferences: 2.3.3" >> pubspec.yaml
+          flutter pub get
 
       - name: Build ONE APK for ALL phones
         run: |
@@ -340,7 +96,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.16.9'
           channel: 'stable'
 
       - name: Create API config with Gemini key
@@ -350,6 +106,12 @@ jobs:
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
           }
           EOF
+
+      - name: Clean and Get dependencies
+        run: |
+          rm -f pubspec.lock
+          flutter clean
+          flutter pub get
 
       - name: Build Web
         run: |
