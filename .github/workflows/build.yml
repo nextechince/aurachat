@@ -26,14 +26,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.9'  # ✅ This has Dart 3.3.0+
+          flutter-version: '3.22.0'
           channel: 'stable'
           cache: true
 
       - name: Check Flutter version
-        run: |
-          flutter --version
-          dart --version
+        run: flutter --version
 
       - name: Create Cloudinary config
         run: |
@@ -92,7 +90,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.9'
+          flutter-version: '3.22.0'
           channel: 'stable'
           cache: true
 
