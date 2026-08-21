@@ -118,8 +118,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   Timer? _statusTimer;
   final Map<String, Map<String, dynamic>> _userCache = {};
   final Set<String> _pendingUserFetches = {};
-  final ValueNotifier<bool> _hasText = ValueNotifier(false);
-
+  
+  // FIX: Use simple boolean instead of ValueNotifier for faster updates
+  bool _hasText = false;
 
   @override
   void initState() {
@@ -127,12 +128,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     WidgetsBinding.instance.addObserver(this);
     _initAudioPlayer();
     _messageController.addListener(_onTextChanged);
+    // Initialize with current value
+    _hasText = _messageController.text.trim().isNotEmpty;
   }
 
   void _onTextChanged() {
     final newValue = _messageController.text.trim().isNotEmpty;
-    if (_hasText.value != newValue) {
-      _hasText.value = newValue;
+    // FIX: Use setState for immediate UI update
+    if (_hasText != newValue) {
+      setState(() {
+        _hasText = newValue;
+      });
     }
   }
 
@@ -198,7 +204,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   @override
   void dispose() {
     _messageController.removeListener(_onTextChanged);
-    _hasText.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _editController.dispose();
@@ -503,7 +508,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _loadMessages() async {
-        if (_chatId == null) {
+    if (_chatId == null) {
       setState(() => _isLoading = false);
       return;
     }
@@ -583,7 +588,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     }
   }
  
-    void _subscribeToMessages() {
+  void _subscribeToMessages() {
     if (_chatId == null) return;
 
     final firestore = FirebaseFirestore.instance;
@@ -704,7 +709,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-    void _scrollToBottom({bool force = false}) {
+  void _scrollToBottom({bool force = false}) {
     if (!_scrollController.hasClients) return;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
@@ -718,51 +723,50 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   }
 
   List<TextSpan> _parseTextWithLinks(String text, bool isMe) {
-  final urlRegex = RegExp(r'https?://[^\s]+');
-  final matches = urlRegex.allMatches(text);
-  
-  if (matches.isEmpty) {
-    return [TextSpan(text: text, style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)))];
-  }
+    final urlRegex = RegExp(r'https?://[^\s]+');
+    final matches = urlRegex.allMatches(text);
+    
+    if (matches.isEmpty) {
+      return [TextSpan(text: text, style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)))];
+    }
 
-  final spans = <TextSpan>[];
-  int lastEnd = 0;
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
 
-  for (final match in matches) {
-    if (match.start > lastEnd) {
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)),
+        ));
+      }
       spans.add(TextSpan(
-        text: text.substring(lastEnd, match.start),
+        text: match.group(0),
+        style: TextStyle(
+          color: isMe ? Colors.white.withOpacity(0.85) : const Color(0xFF8B5CF6),
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()..onTap = () => _openLink(match.group(0)!),
+      ));
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
         style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)),
       ));
     }
-    spans.add(TextSpan(
-      text: match.group(0),
-      style: TextStyle(
-        color: isMe ? Colors.white.withOpacity(0.85) : const Color(0xFF8B5CF6),
-        decoration: TextDecoration.underline,
-      ),
-      recognizer: TapGestureRecognizer()..onTap = () => _openLink(match.group(0)!),
-    ));
-    lastEnd = match.end;
+
+    return spans;
   }
 
-  if (lastEnd < text.length) {
-    spans.add(TextSpan(
-      text: text.substring(lastEnd),
-      style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)),
-    ));
+  Future<void> _openLink(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
-
-  return spans;
-}
-
-Future<void> _openLink(String url) async {
-  final uri = Uri.parse(url);
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-}
-
 
   void _scrollToMessage(String messageId) {
     final index = _messages.indexWhere((m) => m['id'] == messageId);
@@ -796,7 +800,7 @@ Future<void> _openLink(String url) async {
     await _sendMessage(type: 'text', content: text);
   }
 
-    Future<void> _sendMessage({
+  Future<void> _sendMessage({
     required String type,
     required String content,
     String? mediaUrl,
@@ -903,7 +907,7 @@ Future<void> _openLink(String url) async {
         );
       }
     }
-   }
+  }
 
   void _showPermissionDenied() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -932,7 +936,7 @@ Future<void> _openLink(String url) async {
     );
   }
   
-    Future<void> _unblockUser() async {
+  Future<void> _unblockUser() async {
     try {
       final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
       final currentUserId = authProvider.user?.uid ?? authProvider.mockUserId;
@@ -979,7 +983,6 @@ Future<void> _openLink(String url) async {
       debugPrint('Delete chat error: $e');
     }
   }
-
 
   Future<void> _editMessage(String messageId, String newContent) async {
     if (newContent.trim().isEmpty) return;
@@ -1052,7 +1055,7 @@ Future<void> _openLink(String url) async {
     }
   }
 
-    void _showReactionPicker(String messageId) {
+  void _showReactionPicker(String messageId) {
     final allReactions = [
       '❤️', '👍', '👎', '😂', '😮', '😢', '🎉', '🔥',
       '👏', '🙏', '💯', '⭐', '🤔', '🤬', '🤡', '💀',
@@ -1131,7 +1134,7 @@ Future<void> _openLink(String url) async {
     );
   }
 
-    void _forwardMessage(Map<String, dynamic> message) async {
+  void _forwardMessage(Map<String, dynamic> message) async {
     final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
     final currentUserId = authProvider.user?.uid ?? authProvider.mockUserId;
     if (currentUserId == null) return;
@@ -1455,7 +1458,7 @@ Future<void> _openLink(String url) async {
     _scrollToMessage(_searchResults[_currentSearchIndex]['id']);
   }
 
-     Future<void> _deleteMessageForEveryone(String messageId) async {
+  Future<void> _deleteMessageForEveryone(String messageId) async {
     try {
       final firestore = FirebaseFirestore.instance;
       
@@ -1581,7 +1584,7 @@ Future<void> _openLink(String url) async {
     );
   }
 
-    void _showMessageOptions(Map<String, dynamic> message, bool isMe) {
+  void _showMessageOptions(Map<String, dynamic> message, bool isMe) {
     final isDeleted = message['deleted_for_everyone'] == true;
     final isText = message['type'] == 'text';
     final canEdit = isMe && isText && !isDeleted;
@@ -1959,7 +1962,7 @@ Future<void> _openLink(String url) async {
     }
   }
 
-    Future<void> _uploadAndSendMedia({
+  Future<void> _uploadAndSendMedia({
     required File file,
     required String type,
     String? fileName,
@@ -2139,7 +2142,7 @@ Future<void> _openLink(String url) async {
     }
   }
 
-    Future<void> _downloadMedia(String url, String fileName) async {
+  Future<void> _downloadMedia(String url, String fileName) async {
     try {
       // FIX: Request photos permission for images/videos
       final isImage = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png');
@@ -2756,12 +2759,12 @@ Future<void> _openLink(String url) async {
             _buildRecordingIndicator(),
 
           if (_showEmojiPicker)
-  CustomEmojiPicker(
-    onEmojiSelected: (emoji) {
-      setState(() => _messageController.text += emoji);
-    },
-    onClose: () => setState(() => _showEmojiPicker = false),
-  ),
+            CustomEmojiPicker(
+              onEmojiSelected: (emoji) {
+                setState(() => _messageController.text += emoji);
+              },
+              onClose: () => setState(() => _showEmojiPicker = false),
+            ),
 
           Container(
             padding: const EdgeInsets.all(8),
@@ -2817,54 +2820,52 @@ Future<void> _openLink(String url) async {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Mic or Send button — PERFECT FIX: ValueListenableBuilder for instant toggle
-                  ValueListenableBuilder<bool>(
-                    valueListenable: _hasText,
-                    builder: (context, hasText, child) {
-                      final isDisabled = (_isBlocked && !_isGroup) || !_canSend || _isAnnouncementsOnly;
-                      
-                      if (!hasText && !_isRecording) {
-                        // MIC BUTTON
-                        return GestureDetector(
-                          onLongPressStart: isDisabled ? null : (_) => _startRecording(),
-                          onLongPressEnd: isDisabled ? null : (_) => _stopRecordingAndSend(),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: isDisabled
-                                  ? [Colors.grey, Colors.grey]
-                                  : [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.mic, color: Colors.white, size: 20),
-                              onPressed: null,
-                            ),
-                          ),
-                        );
-                      } else if (!_isRecording) {
-                        // SEND BUTTON
-                        return Container(
+                  // FIX: Using simple conditional for instant toggle
+                  if (!_isRecording) ...[
+                    if (!_hasText) ...[
+                      // MIC BUTTON - shown when no text
+                      GestureDetector(
+                        onLongPressStart: (_isBlocked && !_isGroup) || !_canSend || _isAnnouncementsOnly
+                            ? null
+                            : (_) => _startRecording(),
+                        onLongPressEnd: (_isBlocked && !_isGroup) || !_canSend || _isAnnouncementsOnly
+                            ? null
+                            : (_) => _stopRecordingAndSend(),
+                        child: Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: isDisabled || !hasText
-                                ? [Colors.grey, Colors.grey]
-                                : [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)],
+                              colors: (_isBlocked && !_isGroup) || !_canSend || _isAnnouncementsOnly
+                                  ? [Colors.grey, Colors.grey]
+                                  : [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)],
                             ),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: IconButton(
-                            icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                            onPressed: (_canSend && !_isAnnouncementsOnly && hasText && !(_isBlocked && !_isGroup))
+                            icon: const Icon(Icons.mic, color: Colors.white, size: 20),
+                            onPressed: null,
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      // SEND BUTTON - shown when text exists
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: (_isBlocked && !_isGroup) || !_canSend || _isAnnouncementsOnly
+                                ? [Colors.grey, Colors.grey]
+                                : [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                          onPressed: (_canSend && !_isAnnouncementsOnly && !(_isBlocked && !_isGroup))
                               ? _sendTextMessage
                               : null,
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
               ),
             ),
@@ -2994,7 +2995,7 @@ Future<void> _openLink(String url) async {
     );
   }
   
-    Widget _buildMessageBubble(BuildContext context, {
+  Widget _buildMessageBubble(BuildContext context, {
     required Map<String, dynamic> message, 
     required bool isMe, 
     required bool showAvatar,
@@ -3353,7 +3354,7 @@ Future<void> _openLink(String url) async {
   }
 
   Widget _buildVideoBubble({required String videoUrl, required bool isMe}) {
-       if (!_videoControllers.containsKey(videoUrl)) {
+    if (!_videoControllers.containsKey(videoUrl)) {
       final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
       controller.initialize().then((_) { if (mounted) setState(() {}); });
       _videoControllers[videoUrl] = controller;
@@ -3390,7 +3391,7 @@ Future<void> _openLink(String url) async {
     );
   }
   
-    void _openFullScreenVideo(String videoUrl) {
+  void _openFullScreenVideo(String videoUrl) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -3405,166 +3406,166 @@ Future<void> _openLink(String url) async {
   }
   
   Widget _buildLinkPreviewBubble({
-  required String link,
-  required Map<String, dynamic> previewData,
-  required bool isMe,
-}) {
-  final title = previewData['title'] ?? 'Join Group';
-  final description = previewData['description'] ?? '';
-  final imageUrl = previewData['image_url'] as String?;
-  final memberCount = previewData['member_count'] ?? 0;
-  final chatType = previewData['type'] ?? 'group';
+    required String link,
+    required Map<String, dynamic> previewData,
+    required bool isMe,
+  }) {
+    final title = previewData['title'] ?? 'Join Group';
+    final description = previewData['description'] ?? '';
+    final imageUrl = previewData['image_url'] as String?;
+    final memberCount = previewData['member_count'] ?? 0;
+    final chatType = previewData['type'] ?? 'group';
 
-  return GestureDetector(
-    onTap: () {
-      // Handle link tap
-      final uri = Uri.parse(link);
-      final code = uri.pathSegments.last;
-      Navigator.pushNamed(context, '/invitation', arguments: {
-        'code': code,
-      });
-    },
-    child: Container(
-      width: 260,
-      decoration: BoxDecoration(
-        color: isMe ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Group image
-          if (imageUrl != null)
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
+    return GestureDetector(
+      onTap: () {
+        // Handle link tap
+        final uri = Uri.parse(link);
+        final code = uri.pathSegments.last;
+        Navigator.pushNamed(context, '/invitation', arguments: {
+          'code': code,
+        });
+      },
+      child: Container(
+        width: 260,
+        decoration: BoxDecoration(
+          color: isMe ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Group image
+            if (imageUrl != null)
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  width: 260,
+                  height: 140,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    width: 260,
+                    height: 140,
+                    color: Colors.white.withOpacity(0.05),
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    width: 260,
+                    height: 140,
+                    color: const Color(0xFF1a103c),
+                    child: Icon(
+                      chatType == 'channel' ? Icons.campaign : Icons.group,
+                      size: 50,
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Container(
                 width: 260,
                 height: 140,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
-                  width: 260,
-                  height: 140,
-                  color: Colors.white.withOpacity(0.05),
-                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                ),
-                errorWidget: (_, __, ___) => Container(
-                  width: 260,
-                  height: 140,
+                decoration: BoxDecoration(
                   color: const Color(0xFF1a103c),
-                  child: Icon(
-                    chatType == 'channel' ? Icons.campaign : Icons.group,
-                    size: 50,
-                    color: const Color(0xFF8B5CF6),
-                  ),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Icon(
+                  chatType == 'channel' ? Icons.campaign : Icons.group,
+                  size: 50,
+                  color: const Color(0xFF8B5CF6),
                 ),
               ),
-            )
-          else
-            Container(
-              width: 260,
-              height: 140,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1a103c),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Icon(
-                chatType == 'channel' ? Icons.campaign : Icons.group,
-                size: 50,
-                color: const Color(0xFF8B5CF6),
-              ),
-            ),
-          
-          // Content
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        chatType.toUpperCase(),
-                        style: const TextStyle(
-                          color: Color(0xFF8B5CF6),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+            
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          chatType.toUpperCase(),
+                          style: const TextStyle(
+                            color: Color(0xFF8B5CF6),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$memberCount members',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (description.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 12,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.login, color: Colors.white, size: 16),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Text(
-                        'Join Group',
+                        '$memberCount members',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 11,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.login, color: Colors.white, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Join Group',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildFileMessage({required String content, required String? mediaUrl, required String? fileName, required String? fileSize, required bool isMe}) {
     return GestureDetector(
@@ -3858,4 +3859,4 @@ class _FullScreenVideoPlayerState extends State<_FullScreenVideoPlayer> {
       ),
     );    
   }
-}    
+}
