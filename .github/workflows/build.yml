@@ -55,11 +55,158 @@ jobs:
         run: |
           mkdir -p assets/images assets/emojis assets/audio
 
+      - name: Update pubspec for compatibility
+        run: |
+          sed -i 's/sdk: '\''>=3.4.0 <4.0.0'\''/sdk: '\''>=3.0.0 <4.0.0'\''/g' pubspec.yaml
+          # Downgrade emoji_picker_flutter
+          sed -i 's/emoji_picker_flutter: ^3.0.0/emoji_picker_flutter: ^2.0.0/g' pubspec.yaml
+
       - name: Clean and Get dependencies
         run: |
           rm -f pubspec.lock
           flutter clean
           flutter pub get
+
+      - name: Fix Android v1 embedding
+        run: |
+          # Create proper MainActivity.kt with v2 embedding
+          mkdir -p android/app/src/main/kotlin/com/example/aurachat
+          cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
+          package com.example.aurachat
+          import io.flutter.embedding.android.FlutterActivity
+          class MainActivity: FlutterActivity()
+          EOF
+
+          # Fix AndroidManifest.xml
+          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+                  android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.BLUETOOTH" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              
+              <application
+                  android:label="AURA Chat"
+                  android:name="${applicationName}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:allowBackup="true"
+                  android:largeHeap="true"
+                  android:hardwareAccelerated="true"
+                  android:requestLegacyExternalStorage="true">
+                  
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <meta-data
+                          android:name="io.flutter.embedding.android.NormalTheme"
+                          android:resource="@style/NormalTheme"
+                      />
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+                  
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
+              </application>
+          </manifest>
+          EOF
+
+          # Fix build.gradle
+          cat > android/app/build.gradle << 'EOF'
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
+
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+          }
+
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+          if (flutterVersionCode == null) {
+              flutterVersionCode = '1'
+          }
+
+          def flutterVersionName = localProperties.getProperty('flutter.versionName')
+          if (flutterVersionName == null) {
+              flutterVersionName = '1.0'
+          }
+
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply plugin: 'com.google.gms.google-services'
+
+          android {
+              compileSdkVersion 34
+              ndkVersion flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+
+              sourceSets {
+                  main.java.srcDirs += 'src/main/kotlin'
+              }
+
+              defaultConfig {
+                  applicationId "com.example.aurachat"
+                  minSdkVersion 21
+                  targetSdkVersion 34
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+                  multiDexEnabled true
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled true
+                      shrinkResources true
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+          }
+
+          flutter {
+              source '../..'
+          }
+
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
+              implementation 'androidx.multidex:multidex:2.0.1'
+              implementation platform('com.google.firebase:firebase-bom:32.7.0')
+              implementation 'com.google.firebase:firebase-analytics'
+          }
+          EOF
 
       - name: Build ONE APK for ALL phones
         run: |
@@ -101,6 +248,11 @@ jobs:
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
           }
           EOF
+
+      - name: Update pubspec for compatibility
+        run: |
+          sed -i 's/sdk: '\''>=3.4.0 <4.0.0'\''/sdk: '\''>=3.0.0 <4.0.0'\''/g' pubspec.yaml
+          sed -i 's/emoji_picker_flutter: ^3.0.0/emoji_picker_flutter: ^2.0.0/g' pubspec.yaml
 
       - name: Clean and Get dependencies
         run: |
