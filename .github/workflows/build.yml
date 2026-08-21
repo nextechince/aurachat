@@ -33,17 +33,6 @@ jobs:
       - name: Check Flutter version
         run: flutter --version
 
-      # DELETE everything and recreate fresh
-      - name: Complete reset and recreate project
-        run: |
-          # Remove everything except lib, assets, and pubspec
-          find . -maxdepth 1 ! -name '.' ! -name '..' ! -name 'lib' ! -name 'assets' ! -name 'pubspec.yaml' ! -name '.git' ! -name '.github' -exec rm -rf {} +
-          
-          # Create fresh Flutter project with v2 embedding
-          flutter create --platforms=android --org com.example .
-          
-          echo "✅ Fresh project created"
-
       - name: Create Cloudinary config
         run: |
           cat > lib/services/cloudinary_config.dart << 'EOF'
@@ -65,11 +54,6 @@ jobs:
       - name: Create asset directories
         run: |
           mkdir -p assets/images assets/emojis assets/audio
-          # Create a placeholder logo if missing
-          if [ ! -f assets/images/logo.png ]; then
-            echo "Creating placeholder logo..."
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/images/logo.png
-          fi
 
       - name: Fix pubspec.yaml
         run: |
@@ -87,7 +71,6 @@ jobs:
             flutter:
               sdk: flutter
 
-            # Firebase
             firebase_core: ^2.24.2
             firebase_auth: ^4.16.0
             cloud_firestore: ^4.14.0
@@ -95,12 +78,8 @@ jobs:
             firebase_storage: ^11.2.5
             firebase_messaging: ^14.6.5
             cloudinary_public: ^0.23.1
-
-            # State Management
             provider: ^6.1.2
             google_generative_ai: ^0.4.6
-
-            # UI & System
             cupertino_icons: ^1.0.8
             image_picker: ^1.0.7
             intl: ^0.18.1
@@ -110,17 +89,9 @@ jobs:
             share_plus: ^7.2.2
             uni_links: ^0.5.1
             crypto: ^3.0.3
-
-            # Auth & Security
             local_auth: ^2.1.8
-
-            # Phone & Input
             intl_phone_field: ^3.2.0
-
-            # http request
             http: ^1.2.2
-
-            # Chat & Media
             uuid: ^4.5.0
             emoji_picker_flutter: ^2.0.0
             file_picker: ^6.1.1
@@ -132,18 +103,10 @@ jobs:
             dio: ^5.4.0
             path: ^1.8.3
             url_launcher: ^6.2.1
-
-            # Calls
             agora_rtc_engine: ^6.3.0
             permission_handler: ^11.0.1
-
-            # Storage & Preferences
             shared_preferences: ^2.2.2
-
-            # Notifications
             flutter_local_notifications: ^17.0.0
-
-            # Connectivity
             connectivity_plus: ^5.0.0
 
           dev_dependencies:
@@ -154,7 +117,6 @@ jobs:
 
           flutter:
             uses-material-design: true
-
             assets:
               - assets/images/
               - assets/emojis/
@@ -173,177 +135,13 @@ jobs:
             min_sdk_android: 21
           EOF
 
-      - name: Fix Gradle wrapper
-        run: |
-          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
-          EOF
-
-      - name: Fix project build.gradle
-        run: |
-          cat > android/build.gradle << 'EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.22'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-                  classpath 'com.google.gms:google-services:4.4.0'
-              }
-          }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-      - name: Fix app build.gradle
-        run: |
-          cat > android/app/build.gradle << 'EOF'
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader ->
-                  localProperties.load(reader)
-              }
-          }
-
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
-          }
-
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-          if (flutterVersionCode == null) {
-              flutterVersionCode = '1'
-          }
-
-          def flutterVersionName = localProperties.getProperty('flutter.versionName')
-          if (flutterVersionName == null) {
-              flutterVersionName = '1.0'
-          }
-
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply plugin: 'com.google.gms.google-services'
-
-          android {
-              compileSdkVersion 34
-              ndkVersion flutter.ndkVersion
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-
-              sourceSets {
-                  main.java.srcDirs += 'src/main/kotlin'
-              }
-
-              defaultConfig {
-                  applicationId "com.example.aurachat"
-                  minSdkVersion 21
-                  targetSdkVersion 34
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
-                  multiDexEnabled true
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                      minifyEnabled true
-                      shrinkResources true
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-          }
-
-          flutter {
-              source '../..'
-          }
-
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-              implementation 'androidx.multidex:multidex:2.0.1'
-              implementation platform('com.google.firebase:firebase-bom:32.7.0')
-              implementation 'com.google.firebase:firebase-analytics'
-          }
-          EOF
-
-      - name: Fix settings.gradle
-        run: |
-          cat > android/settings.gradle << 'EOF'
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
-              }()
-
-              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          plugins {
-              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "8.1.0" apply false
-              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
-          }
-
-          include ":app"
-          EOF
-
-      - name: Copy google-services.json
-        run: |
-          if [ -f google-services.json ]; then
-            cp google-services.json android/app/
-            echo "✅ google-services.json copied"
-          else
-            echo "⚠️ google-services.json not found"
-          fi
-
       - name: Clean and Get dependencies
         run: |
           rm -f pubspec.lock
           flutter clean
           flutter pub get
 
-      - name: Build ONE APK for ALL phones
+      - name: Build APK
         run: |
           flutter build apk --release
 
