@@ -33,6 +33,13 @@ jobs:
       - name: Check Flutter version
         run: flutter --version
 
+      # DELETE existing android folder and recreate with v2 embedding
+      - name: Recreate Android project with v2 embedding
+        run: |
+          rm -rf android
+          flutter create --platforms=android --org com.example .
+          echo "✅ Android project recreated with v2 embedding"
+
       - name: Create Cloudinary config
         run: |
           cat > lib/services/cloudinary_config.dart << 'EOF'
@@ -58,26 +65,23 @@ jobs:
       - name: Update pubspec for compatibility
         run: |
           sed -i 's/sdk: '\''>=3.4.0 <4.0.0'\''/sdk: '\''>=3.0.0 <4.0.0'\''/g' pubspec.yaml
-          # Downgrade emoji_picker_flutter
           sed -i 's/emoji_picker_flutter: ^3.0.0/emoji_picker_flutter: ^2.0.0/g' pubspec.yaml
+          sed -i 's/shared_preferences: ^2.3.4/shared_preferences: ^2.2.2/g' pubspec.yaml
+          sed -i 's/intl: ^0.19.0/intl: ^0.18.1/g' pubspec.yaml
 
-      - name: Clean and Get dependencies
+      - name: Fix MainActivity for v2 embedding
         run: |
-          rm -f pubspec.lock
-          flutter clean
-          flutter pub get
-
-      - name: Fix Android v1 embedding
-        run: |
-          # Create proper MainActivity.kt with v2 embedding
-          mkdir -p android/app/src/main/kotlin/com/example/aurachat
           cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
           package com.example.aurachat
+
           import io.flutter.embedding.android.FlutterActivity
+
           class MainActivity: FlutterActivity()
           EOF
+          echo "✅ MainActivity fixed"
 
-          # Fix AndroidManifest.xml
+      - name: Fix AndroidManifest.xml
+        run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               
@@ -130,20 +134,24 @@ jobs:
               </application>
           </manifest>
           EOF
+          echo "✅ AndroidManifest.xml fixed"
 
-          # Fix build.gradle
+      - name: Fix app/build.gradle
+        run: |
           cat > android/app/build.gradle << 'EOF'
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+              id "com.google.gms.google-services"
+          }
+
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
           if (localPropertiesFile.exists()) {
               localPropertiesFile.withReader('UTF-8') { reader ->
                   localProperties.load(reader)
               }
-          }
-
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
           }
 
           def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
@@ -156,11 +164,8 @@ jobs:
               flutterVersionName = '1.0'
           }
 
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply plugin: 'com.google.gms.google-services'
-
           android {
+              namespace "com.example.aurachat"
               compileSdkVersion 34
               ndkVersion flutter.ndkVersion
 
@@ -201,12 +206,25 @@ jobs:
           }
 
           dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
               implementation 'androidx.multidex:multidex:2.0.1'
               implementation platform('com.google.firebase:firebase-bom:32.7.0')
               implementation 'com.google.firebase:firebase-analytics'
           }
           EOF
+          echo "✅ app/build.gradle fixed"
+
+      - name: Copy google-services.json if exists
+        run: |
+          if [ -f google-services.json ]; then
+            cp google-services.json android/app/
+            echo "✅ google-services.json copied"
+          fi
+
+      - name: Clean and Get dependencies
+        run: |
+          rm -f pubspec.lock
+          flutter clean
+          flutter pub get
 
       - name: Build ONE APK for ALL phones
         run: |
