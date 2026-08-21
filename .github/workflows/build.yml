@@ -33,31 +33,30 @@ jobs:
       - name: Check Flutter version
         run: flutter --version
 
-      # COMPLETE RESET - Delete everything and recreate fresh
       - name: Complete project reset
         run: |
           # Save important files
           mkdir -p /tmp/backup
-          cp -r lib /tmp/backup/ 2>/dev/null || true
-          cp -r assets /tmp/backup/ 2>/dev/null || true
-          cp pubspec.yaml /tmp/backup/ 2>/dev/null || true
-          cp google-services.json /tmp/backup/ 2>/dev/null || true
-          cp firebase_options.dart /tmp/backup/ 2>/dev/null || true
+          [ -d "lib" ] && cp -r lib /tmp/backup/
+          [ -d "assets" ] && cp -r assets /tmp/backup/
+          [ -f "pubspec.yaml" ] && cp pubspec.yaml /tmp/backup/
+          [ -f "google-services.json" ] && cp google-services.json /tmp/backup/
+          [ -f "firebase_options.dart" ] && cp firebase_options.dart /tmp/backup/
           
           # Delete everything except .git
           find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.git' ! -name '.github' -exec rm -rf {} +
           
-          # Create fresh Flutter project
+          # Create fresh Flutter project with Android
           flutter create --platforms=android,web --org com.example .
           
           # Restore files
-          cp -r /tmp/backup/lib/* lib/ 2>/dev/null || true
-          cp -r /tmp/backup/assets/* assets/ 2>/dev/null || true
-          cp /tmp/backup/pubspec.yaml . 2>/dev/null || true
-          cp /tmp/backup/google-services.json android/app/ 2>/dev/null || true
-          cp /tmp/backup/firebase_options.dart lib/ 2>/dev/null || true
+          [ -d "/tmp/backup/lib" ] && cp -r /tmp/backup/lib/* lib/ 2>/dev/null || true
+          [ -d "/tmp/backup/assets" ] && cp -r /tmp/backup/assets/* assets/ 2>/dev/null || true
+          [ -f "/tmp/backup/pubspec.yaml" ] && cp /tmp/backup/pubspec.yaml . 2>/dev/null || true
+          [ -f "/tmp/backup/google-services.json" ] && cp /tmp/backup/google-services.json android/app/ 2>/dev/null || true
+          [ -f "/tmp/backup/firebase_options.dart" ] && cp /tmp/backup/firebase_options.dart lib/ 2>/dev/null || true
           
-          echo "✅ Fresh project created with v2 embedding"
+          echo "✅ Project reset complete"
 
       - name: Fix pubspec.yaml
         run: |
@@ -139,9 +138,10 @@ jobs:
             min_sdk_android: 21
           EOF
 
-      - name: Create Cloudinary config
+      - name: Create config files
         run: |
           mkdir -p lib/services
+          
           cat > lib/services/cloudinary_config.dart << 'EOF'
           class CloudinaryConfig {
             static const String cloudName = '${{ secrets.CLOUDINARY_CLOUD_NAME }}';
@@ -150,21 +150,89 @@ jobs:
           }
           EOF
 
-      - name: Create API config with Gemini key
-        run: |
           cat > lib/services/api_config.dart << 'EOF'
           class ApiConfig {
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
           }
           EOF
 
-      - name: Create asset directories
-        run: |
-          mkdir -p assets/images assets/emojis/assets/audio
+          mkdir -p assets/images assets/emojis assets/audio
           # Create placeholder logo
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/images/logo.png
 
-      - name: Fix MainActivity for v2 embedding
+      - name: UPGRADE GRADLE - This is the FIX!
+        run: |
+          # Upgrade to Gradle 8.4
+          cd android
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version=8.4
+          cd ..
+          
+          # Fix build.gradle for Gradle 8.4
+          cat > android/build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+                  classpath 'com.google.gms:google-services:4.4.0'
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          cat > android/settings.gradle << 'EOF'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+
+              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "8.1.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
+          }
+
+          include ":app"
+          EOF
+
+      - name: Fix MainActivity
         run: |
           cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
           package com.example.aurachat
@@ -229,9 +297,8 @@ jobs:
           </manifest>
           EOF
 
-      - name: Fix Gradle files
+      - name: Fix app/build.gradle
         run: |
-          # Fix app/build.gradle
           cat > android/app/build.gradle << 'EOF'
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -306,80 +373,6 @@ jobs:
               implementation platform('com.google.firebase:firebase-bom:32.7.0')
               implementation 'com.google.firebase:firebase-analytics'
           }
-          EOF
-
-          # Fix project build.gradle
-          cat > android/build.gradle << 'EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.22'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-                  classpath 'com.google.gms:google-services:4.4.0'
-              }
-          }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-          # Fix settings.gradle
-          cat > android/settings.gradle << 'EOF'
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
-              }()
-
-              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          plugins {
-              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "8.1.0" apply false
-              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
-          }
-
-          include ":app"
-          EOF
-
-          # Fix gradle wrapper
-          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
           EOF
 
       - name: Clean and Get dependencies
