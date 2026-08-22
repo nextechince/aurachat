@@ -101,7 +101,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
             AndroidAuthMessages(
              cancelButton: 'Cancel',
              goToSettingsButton: 'Settings',
-             tryAgain: 'Try Again',
             ),
           ],
           options: const AuthenticationOptions(
