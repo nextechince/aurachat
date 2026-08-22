@@ -37,7 +37,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
   final _editController = TextEditingController();
   final _scrollController = ScrollController();
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final Record _audioRecorder = Record();
+  final AudioRecorder _audioRecorder = AudioRecorder();
 
   bool _isLoading = false;
   bool _showEmojiPicker = false;
