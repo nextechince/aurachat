@@ -9,7 +9,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
-import 'package:local_auth_ios/local_auth_ios.dart';
 
 import 'themes/app_theme.dart';
 import 'providers/auth_provider.dart' show AuraAuthProvider;
@@ -632,7 +631,7 @@ class _LockScreenState extends State<LockScreen> {
               goToSettingsButton: 'Go to Settings',
               goToSettingsDescription: 'Please set up biometric authentication in your device settings',
             ),
-            IOSAuthMessages(
+            AndroidAuthMessages(
               cancelButton: 'Cancel',
               goToSettingsButton: 'Go to Settings',
               goToSettingsDescription: 'Please set up biometric authentication in your device settings',
