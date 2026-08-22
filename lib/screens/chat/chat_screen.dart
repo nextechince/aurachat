@@ -56,7 +56,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   final _scrollController = ScrollController();
 
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final Record _audioRecorder = Record();
+  final AudioRecorder _audioRecorder = AudioRecorder();
 
   bool _showEmojiPicker = false;
   bool _isPlayingAudio = false;
