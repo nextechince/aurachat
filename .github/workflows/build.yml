@@ -26,7 +26,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'  # ✅ Use stable version instead of 3.22.0
+          flutter-version: '3.16.9'  # ✅ Most stable version
           channel: 'stable'
           cache: true
 
@@ -159,7 +159,7 @@ jobs:
           mkdir -p assets/images assets/emojis assets/audio
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/images/logo.png
 
-      - name: Fix MainActivity for v2 embedding
+      - name: Fix MainActivity
         run: |
           cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
           package com.example.aurachat
@@ -224,7 +224,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Fix Gradle files for Flutter 3.19.6
+      - name: Fix Gradle files
         run: |
           # Fix project build.gradle
           cat > android/build.gradle << 'EOF'
@@ -236,7 +236,7 @@ jobs:
               }
 
               dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
+                  classpath 'com.android.tools.build:gradle:7.4.2'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
                   classpath 'com.google.gms:google-services:4.4.0'
               }
@@ -361,7 +361,7 @@ jobs:
 
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "8.1.0" apply false
+              id "com.android.application" version "7.4.2" apply false
               id "org.jetbrains.kotlin.android" version "1.9.22" apply false
           }
 
@@ -374,7 +374,7 @@ jobs:
           distributionPath=wrapper/dists
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip
           EOF
 
       - name: Clean and Get dependencies
@@ -412,7 +412,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.16.9'
           channel: 'stable'
           cache: true
 
