@@ -33,30 +33,215 @@ jobs:
       - name: Check Flutter version
         run: flutter --version
 
-      - name: Complete project reset
+      - name: DELETE corrupted android folder and CREATE fresh one
         run: |
-          # Save important files
+          # Save your code files
           mkdir -p /tmp/backup
-          [ -d "lib" ] && cp -r lib /tmp/backup/
-          [ -d "assets" ] && cp -r assets /tmp/backup/
-          [ -f "pubspec.yaml" ] && cp pubspec.yaml /tmp/backup/
-          [ -f "google-services.json" ] && cp google-services.json /tmp/backup/
-          [ -f "firebase_options.dart" ] && cp firebase_options.dart /tmp/backup/
+          cp -r lib /tmp/backup/ 2>/dev/null || true
+          cp -r assets /tmp/backup/ 2>/dev/null || true
+          cp pubspec.yaml /tmp/backup/ 2>/dev/null || true
+          cp google-services.json /tmp/backup/ 2>/dev/null || true
           
-          # Delete everything except .git
-          find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.git' ! -name '.github' -exec rm -rf {} +
+          # DELETE the bad android folder
+          rm -rf android
           
-          # Create fresh Flutter project
-          flutter create --platforms=android,web --org com.example .
+          # CREATE fresh android folder with flutter create
+          flutter create --platforms=android --org com.example .
           
-          # Restore files
-          [ -d "/tmp/backup/lib" ] && cp -r /tmp/backup/lib/* lib/ 2>/dev/null || true
-          [ -d "/tmp/backup/assets" ] && cp -r /tmp/backup/assets/* assets/ 2>/dev/null || true
-          [ -f "/tmp/backup/pubspec.yaml" ] && cp /tmp/backup/pubspec.yaml . 2>/dev/null || true
-          [ -f "/tmp/backup/google-services.json" ] && cp /tmp/backup/google-services.json android/app/ 2>/dev/null || true
-          [ -f "/tmp/backup/firebase_options.dart" ] && cp /tmp/backup/firebase_options.dart lib/ 2>/dev/null || true
+          # RESTORE your code
+          cp -r /tmp/backup/lib/* lib/ 2>/dev/null || true
+          cp -r /tmp/backup/assets/* assets/ 2>/dev/null || true
+          cp /tmp/backup/pubspec.yaml . 2>/dev/null || true
+          cp /tmp/backup/google-services.json android/app/ 2>/dev/null || true
           
-          echo "✅ Project reset complete"
+          echo "✅ Fresh Android folder created!"
+
+      - name: Fix MainActivity
+        run: |
+          cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
+          package com.example.aurachat
+          import io.flutter.embedding.android.FlutterActivity
+          class MainActivity: FlutterActivity()
+          EOF
+
+      - name: Fix AndroidManifest
+        run: |
+          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              
+              <application
+                  android:label="AURA Chat"
+                  android:name="${applicationName}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:allowBackup="true"
+                  android:largeHeap="true"
+                  android:hardwareAccelerated="true"
+                  android:requestLegacyExternalStorage="true">
+                  
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <meta-data
+                          android:name="io.flutter.embedding.android.NormalTheme"
+                          android:resource="@style/NormalTheme"
+                      />
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+                  
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
+              </application>
+          </manifest>
+          EOF
+
+      - name: Fix Gradle
+        run: |
+          cat > android/build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '1.8.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.4.2'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+                  classpath 'com.google.gms:google-services:4.3.15'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          cat > android/app/build.gradle << 'EOF'
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+          }
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+          if (flutterVersionCode == null) {
+              flutterVersionCode = '1'
+          }
+          def flutterVersionName = localProperties.getProperty('flutter.versionName')
+          if (flutterVersionName == null) {
+              flutterVersionName = '1.0'
+          }
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply plugin: 'com.google.gms.google-services'
+          android {
+              compileSdkVersion 34
+              ndkVersion flutter.ndkVersion
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+              sourceSets {
+                  main.java.srcDirs += 'src/main/kotlin'
+              }
+              defaultConfig {
+                  applicationId "com.example.aurachat"
+                  minSdkVersion 21
+                  targetSdkVersion 34
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+                  multiDexEnabled true
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled true
+                      shrinkResources true
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+          }
+          flutter {
+              source '../..'
+          }
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+              implementation 'androidx.multidex:multidex:2.0.1'
+              implementation platform('com.google.firebase:firebase-bom:32.7.0')
+              implementation 'com.google.firebase:firebase-analytics'
+          }
+          EOF
+
+          cat > android/settings.gradle << 'EOF'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "7.4.2" apply false
+              id "org.jetbrains.kotlin.android" version "1.8.22" apply false
+          }
+          include ":app"
+          EOF
+
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip
+          EOF
 
       - name: Fix pubspec.yaml
         run: |
@@ -64,16 +249,12 @@ jobs:
           name: aurachat
           description: AURA Chat App
           publish_to: 'none'
-
           version: 3.0.0+1
-
           environment:
             sdk: '>=3.0.0 <4.0.0'
-
           dependencies:
             flutter:
               sdk: flutter
-
             firebase_core: ^2.15.1
             firebase_auth: ^4.9.0
             cloud_firestore: ^4.8.4
@@ -111,24 +292,17 @@ jobs:
             shared_preferences: ^2.2.2
             flutter_local_notifications: ^15.1.1
             connectivity_plus: ^4.0.2
-
           dev_dependencies:
             flutter_test:
               sdk: flutter
             flutter_lints: ^2.0.0
             flutter_launcher_icons: ^0.13.1
-
           flutter:
             uses-material-design: true
             assets:
               - assets/images/
               - assets/emojis/
               - assets/audio/
-              - assets/audio/ringtone_ambition.mp3
-              - assets/audio/ringtone_phonk.mp3
-              - assets/audio/ringtone_fadded.mp3
-              - assets/audio/ringtone_pop.mp3
-
           flutter_launcher_icons:
             android: true
             ios: false
@@ -141,7 +315,6 @@ jobs:
       - name: Create config files
         run: |
           mkdir -p lib/services
-          
           cat > lib/services/cloudinary_config.dart << 'EOF'
           class CloudinaryConfig {
             static const String cloudName = '${{ secrets.CLOUDINARY_CLOUD_NAME }}';
@@ -149,238 +322,18 @@ jobs:
             static const String apiSecret = '${{ secrets.CLOUDINARY_API_SECRET }}';
           }
           EOF
-
           cat > lib/services/api_config.dart << 'EOF'
           class ApiConfig {
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
           }
           EOF
-
           mkdir -p assets/images assets/emojis assets/audio
-          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/images/logo.png
 
-      - name: Fix MainActivity
-        run: |
-          cat > android/app/src/main/kotlin/com/example/aurachat/MainActivity.kt << 'EOF'
-          package com.example.aurachat
-
-          import io.flutter.embedding.android.FlutterActivity
-
-          class MainActivity: FlutterActivity()
-          EOF
-
-      - name: Fix AndroidManifest.xml
-        run: |
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-                  android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.BLUETOOTH" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              
-              <application
-                  android:label="AURA Chat"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher"
-                  android:allowBackup="true"
-                  android:largeHeap="true"
-                  android:hardwareAccelerated="true"
-                  android:requestLegacyExternalStorage="true">
-                  
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                          android:name="io.flutter.embedding.android.NormalTheme"
-                          android:resource="@style/NormalTheme"
-                      />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
-          EOF
-
-      - name: Fix Gradle files for Flutter 3.13.9
-        run: |
-          cat > android/build.gradle << 'EOF'
-          buildscript {
-              ext.kotlin_version = '1.8.22'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.4.2'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-                  classpath 'com.google.gms:google-services:4.3.15'
-              }
-          }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-          cat > android/app/build.gradle << 'EOF'
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader ->
-                  localProperties.load(reader)
-              }
-          }
-
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
-          }
-
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-          if (flutterVersionCode == null) {
-              flutterVersionCode = '1'
-          }
-
-          def flutterVersionName = localProperties.getProperty('flutter.versionName')
-          if (flutterVersionName == null) {
-              flutterVersionName = '1.0'
-          }
-
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply plugin: 'com.google.gms.google-services'
-
-          android {
-              compileSdkVersion 34
-              ndkVersion flutter.ndkVersion
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-
-              sourceSets {
-                  main.java.srcDirs += 'src/main/kotlin'
-              }
-
-              defaultConfig {
-                  applicationId "com.example.aurachat"
-                  minSdkVersion 21
-                  targetSdkVersion 34
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
-                  multiDexEnabled true
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                      minifyEnabled true
-                      shrinkResources true
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-          }
-
-          flutter {
-              source '../..'
-          }
-
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-              implementation 'androidx.multidex:multidex:2.0.1'
-              implementation platform('com.google.firebase:firebase-bom:32.7.0')
-              implementation 'com.google.firebase:firebase-analytics'
-          }
-          EOF
-
-          cat > android/settings.gradle << 'EOF'
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
-              }()
-
-              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          plugins {
-              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "7.4.2" apply false
-              id "org.jetbrains.kotlin.android" version "1.8.22" apply false
-          }
-
-          include ":app"
-          EOF
-
-          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip
-          EOF
-
-      - name: Clean and Get dependencies
+      - name: Clean and Build
         run: |
           rm -f pubspec.lock
           flutter clean
           flutter pub get
-
-      - name: Build APK
-        run: |
           flutter build apk --release
 
       - name: Upload APK
@@ -398,42 +351,3 @@ jobs:
           body: "AURA CHAT Release - Works on all Android 5.0+ phones"
           token: ${{ secrets.GITHUB_TOKEN }}
           allowUpdates: true
-
-  build-web:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.13.9'
-          channel: 'stable'
-          cache: true
-
-      - name: Create API config with Gemini key
-        run: |
-          mkdir -p lib/services
-          cat > lib/services/api_config.dart << 'EOF'
-          class ApiConfig {
-            static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
-          }
-          EOF
-
-      - name: Clean and Get dependencies
-        run: |
-          rm -f pubspec.lock
-          flutter clean
-          flutter pub get
-
-      - name: Build Web
-        run: |
-          flutter config --enable-web
-          flutter build web --release
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
