@@ -99,7 +99,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
               goToSettingsButton: 'Go to Settings',
               goToSettingsDescription: 'Please set up biometric authentication in your device settings',
             ),
-            IOSAuthMessages(
+            AndroidAuthMessages(
               cancelButton: 'Cancel',
               goToSettingsButton: 'Go to Settings',
               goToSettingsDescription: 'Please set up biometric authentication in your device settings',
