@@ -46,7 +46,7 @@ dependencies:
 
   # Chat & Media
   uuid: ^4.5.0
-  emoji_picker_flutter: ^2.0.0  # ✅ DOWNGRADED from 3.0.0 to 2.0.0
+  emoji_picker_flutter: ^2.0.0
   file_picker: ^6.1.1
   path_provider: ^2.1.0
   open_filex: ^4.3.4
@@ -62,7 +62,7 @@ dependencies:
   permission_handler: ^11.0.1
 
   # Storage & Preferences
-  shared_preferences: ^2.2.2  # ✅ DOWNGRADED
+  shared_preferences: ^2.2.2
 
   # Notifications
   flutter_local_notifications: ^17.0.0
@@ -95,3 +95,6 @@ flutter_launcher_icons:
   adaptive_icon_background: "#0A0A0F"
   adaptive_icon_foreground: "assets/images/logo.png"
   min_sdk_android: 21
+
+dependency_overrides:
+  record_linux: ^0.6.0
