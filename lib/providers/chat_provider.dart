@@ -244,7 +244,7 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-    Future<Map<String, dynamic>?> startDirectChat(String otherUserId) async {
+  Future<Map<String, dynamic>?> startDirectChat(String otherUserId) async {
     try {
       final userId = _currentUserId;
       if (userId == null) return null;
@@ -359,6 +359,60 @@ class ChatProvider extends ChangeNotifier {
     } catch (e) {
       _error = 'Failed to delete chat: $e';
       notifyListeners();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW: permanentlyDeleteChat - Permanently deletes chat for everyone
+  // ═══════════════════════════════════════════════════════════════════════════
+  Future<bool> permanentlyDeleteChat(String chatId) async {
+    try {
+      final userId = _currentUserId;
+      if (userId == null) return false;
+
+      // Get chat data to check ownership
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      if (!chatDoc.exists) return false;
+
+      final chatData = chatDoc.data()!;
+      final createdBy = chatData['created_by'] as String?;
+      final chatType = chatData['type'] as String? ?? 'direct';
+
+      // Only owner can permanently delete groups/channels
+      if (chatType == 'group' || chatType == 'channel') {
+        if (createdBy != userId) {
+          _error = 'Only the owner can permanently delete this chat';
+          notifyListeners();
+          return false;
+        }
+      }
+
+      // Delete all messages in the chat
+      final messagesSnapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in messagesSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      // Delete the chat document
+      await _firestore.collection('chats').doc(chatId).delete();
+
+      // Remove from local list
+      _chats.removeWhere((chat) => chat['id'] == chatId);
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      _error = 'Failed to permanently delete chat: $e';
+      debugPrint('permanentlyDeleteChat error: $e');
+      notifyListeners();
+      return false;
     }
   }
 
