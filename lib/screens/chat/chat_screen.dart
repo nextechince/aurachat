@@ -2032,10 +2032,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-      await _audioRecorder.start(
-        path: path,
-        encoder: AudioEncoder.aacLc,
-      );
+      await _audioRecorder.start(path: path, encoder: AudioEncoder.aacLc);
 
       setState(() {
         _isRecording = true;
