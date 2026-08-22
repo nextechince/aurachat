@@ -243,7 +243,7 @@ jobs:
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip
           EOF
 
-      - name: Fix pubspec.yaml
+      - name: Fix pubspec.yaml with COMPATIBLE versions
         run: |
           cat > pubspec.yaml << 'EOF'
           name: aurachat
