@@ -634,8 +634,7 @@ class _LockScreenState extends State<LockScreen> {
             AndroidAuthMessages(
               cancelButton: 'Cancel',
               goToSettingsButton: 'Go to Settings',
-              goToSettingsDescription: 'Please set up biometric authentication in your device settings',
-              lockOut: 'Please re-enable biometric authentication',
+              goToSettingsDescription: 'Please set up biometric authentication in your device settings',     
             ),
           ],
           options: const AuthenticationOptions(
