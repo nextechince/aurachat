@@ -26,7 +26,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.9'  # ✅ Most stable version
+          flutter-version: '3.19.6'
           channel: 'stable'
           cache: true
 
@@ -58,7 +58,7 @@ jobs:
           
           echo "✅ Project reset complete"
 
-      - name: Fix pubspec.yaml
+      - name: Fix pubspec.yaml with compatible versions
         run: |
           cat > pubspec.yaml << 'EOF'
           name: aurachat
@@ -86,7 +86,7 @@ jobs:
             cupertino_icons: ^1.0.8
             image_picker: ^1.0.7
             intl: ^0.18.1
-            google_fonts: ^6.2.1
+            google_fonts: ^6.1.0
             cached_network_image: ^3.3.0
             photo_view: ^0.14.0
             share_plus: ^7.2.2
@@ -236,7 +236,7 @@ jobs:
               }
 
               dependencies {
-                  classpath 'com.android.tools.build:gradle:7.4.2'
+                  classpath 'com.android.tools.build:gradle:8.1.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
                   classpath 'com.google.gms:google-services:4.4.0'
               }
@@ -361,7 +361,7 @@ jobs:
 
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "7.4.2" apply false
+              id "com.android.application" version "8.1.0" apply false
               id "org.jetbrains.kotlin.android" version "1.9.22" apply false
           }
 
@@ -374,7 +374,7 @@ jobs:
           distributionPath=wrapper/dists
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
           EOF
 
       - name: Clean and Get dependencies
@@ -412,7 +412,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.9'
+          flutter-version: '3.19.6'
           channel: 'stable'
           cache: true
 
