@@ -99,10 +99,9 @@ class _SecurityScreenState extends State<SecurityScreen> {
               goToSettingsDescription: 'Please set up biometric authentication in your device settings',
             ),
             AndroidAuthMessages(
-              cancelButton: 'Cancel',
-              goToSettingsButton: 'Go to Settings',
-              goToSettingsDescription: 'Please set up biometric authentication in your device settings',
-              lockOut: 'Please re-enable biometric authentication',
+             cancelButton: 'Cancel',
+             goToSettingsButton: 'Settings',
+             tryAgain: 'Try Again',
             ),
           ],
           options: const AuthenticationOptions(
