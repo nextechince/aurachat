@@ -33,30 +33,7 @@ jobs:
       - name: Check Flutter version
         run: flutter --version
 
-      - name: DELETE corrupted android folder and CREATE fresh one
-        run: |
-          # Save your code files
-          mkdir -p /tmp/backup
-          cp -r lib /tmp/backup/ 2>/dev/null || true
-          cp -r assets /tmp/backup/ 2>/dev/null || true
-          cp pubspec.yaml /tmp/backup/ 2>/dev/null || true
-          cp google-services.json /tmp/backup/ 2>/dev/null || true
-          
-          # DELETE the bad android folder
-          rm -rf android
-          
-          # CREATE fresh android folder with flutter create
-          flutter create --platforms=android --org com.example .
-          
-          # RESTORE your code
-          cp -r /tmp/backup/lib/* lib/ 2>/dev/null || true
-          cp -r /tmp/backup/assets/* assets/ 2>/dev/null || true
-          cp /tmp/backup/pubspec.yaml . 2>/dev/null || true
-          cp /tmp/backup/google-services.json android/app/ 2>/dev/null || true
-          
-          echo "✅ Fresh Android folder created!"
-
-      - name: FORCE FIX PUBSPEC with overrides
+      - name: FIRST - Override pubspec.yaml BEFORE anything else
         run: |
           cat > pubspec.yaml << 'EOF'
           name: aurachat
@@ -107,7 +84,7 @@ jobs:
             shared_preferences: ^2.2.2
             flutter_local_notifications: ^15.1.1
             connectivity_plus: ^4.0.2
-            emoji_picker_flutter: ^1.7.0
+            emoji_picker_flutter: 1.7.0
 
           dev_dependencies:
             flutter_test:
@@ -133,6 +110,29 @@ jobs:
             adaptive_icon_foreground: "assets/images/logo.png"
             min_sdk_android: 21
           EOF
+          
+          echo "✅ pubspec.yaml OVERRIDDEN with correct versions"
+
+      - name: DELETE corrupted android folder and CREATE fresh one
+        run: |
+          # Save your code files (NOT pubspec.yaml - we already fixed it)
+          mkdir -p /tmp/backup
+          cp -r lib /tmp/backup/ 2>/dev/null || true
+          cp -r assets /tmp/backup/ 2>/dev/null || true
+          cp google-services.json /tmp/backup/ 2>/dev/null || true
+          
+          # DELETE the bad android folder
+          rm -rf android
+          
+          # CREATE fresh android folder with flutter create
+          flutter create --platforms=android --org com.example .
+          
+          # RESTORE your code (NOT pubspec.yaml - we keep our fixed version)
+          cp -r /tmp/backup/lib/* lib/ 2>/dev/null || true
+          cp -r /tmp/backup/assets/* assets/ 2>/dev/null || true
+          cp /tmp/backup/google-services.json android/app/ 2>/dev/null || true
+          
+          echo "✅ Fresh Android folder created!"
 
       - name: Fix MainActivity
         run: |
