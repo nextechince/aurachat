@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart' show AuraAuthProvider;
 import '../../providers/chat_provider.dart';
 import '../../screens/status/status_screen.dart';
@@ -270,7 +272,7 @@ class _MainAppScreenState extends State<MainAppScreen>
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.only(top: 4),
           itemCount: chatProvider.chats.length,
           itemBuilder: (context, index) {
             final chat = chatProvider.chats[index];
@@ -281,172 +283,115 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ✅ COMPACT CHAT TILE - Like Telegram
   Widget _buildChatTile(Map<String, dynamic> chat) {
     final name = chat['name'] ?? 'Unknown';
     final avatar = chat['avatar_url'];
     final lastMessage = chat['last_message'] ?? '';
-    final time = chat['updated_at'];
+    final time = chat['last_message_at'];
     final unread = chat['unread_count'] ?? 0;
     final chatType = chat['type'] as String? ?? 'direct';
     final isGroup = chatType == 'group';
     final isChannel = chatType == 'channel';
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.05),
-        ),
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      leading: CircleAvatar(
+        radius: 22,
+        backgroundColor: const Color(0xFF1a103c),
+        backgroundImage: avatar != null ? NetworkImage(avatar) : null,
+        child: avatar == null
+            ? Icon(
+                isChannel ? Icons.campaign : isGroup ? Icons.group : Icons.person,
+                color: const Color(0xFF8B5CF6),
+                size: 18,
+              )
+            : null,
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                blurRadius: 10,
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
               ),
-            ],
-          ),
-          child: CircleAvatar(
-            radius: 28,
-            backgroundColor: const Color(0xFF1a103c),
-            backgroundImage: avatar != null ? NetworkImage(avatar) : null,
-            child: avatar == null
-                ? Icon(
-                    isChannel ? Icons.campaign : isGroup ? Icons.group : Icons.person,
-                    color: const Color(0xFF8B5CF6),
-                    size: 20,
-                  )
-                : null,
-          ),
-        ),
-        title: Row(
-          children: [
-            Flexible(
-              child: Text(
-                name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+              overflow: TextOverflow.ellipsis,
             ),
-            if (isChannel)
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'CHANNEL',
-                    style: TextStyle(
-                      color: Color(0xFF8B5CF6),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            if (isGroup)
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF06B6D4).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'GROUP',
-                    style: TextStyle(
-                      color: Color(0xFF06B6D4),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        subtitle: Text(
-          lastMessage,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.4),
-            fontSize: 13,
           ),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (time != null)
-              Text(
+          if (time != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
                 _formatTime(time),
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.3),
                   fontSize: 11,
                 ),
               ),
-            if (unread > 0) ...[
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
+            ),
+        ],
+      ),
+      subtitle: Row(
+        children: [
+          Expanded(
+            child: Text(
+              lastMessage.isNotEmpty ? lastMessage : '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.4),
+                fontSize: 13,
+              ),
+            ),
+          ),
+          if (unread > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
                 ),
-                child: Text(
-                  unread.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                unread.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ],
+            ),
           ],
-        ),
-        onTap: () {
-          if (isChannel) {
-            Navigator.pushNamed(
-              context,
-              '/channel',
-              arguments: {
-                'channelId': chat['id'],
-                'channelName': name,
-              },
-            );
-          } else {
-            Navigator.pushNamed(
-              context,
-              '/chat',
-              arguments: {
-                'chatId': chat['id'],
-                'chatName': name,
-                'chatAvatar': avatar,
-                'isGroup': isGroup,
-              },
-            );
-          }
-        },
+        ],
       ),
+      onTap: () {
+        if (isChannel) {
+          Navigator.pushNamed(
+            context,
+            '/channel',
+            arguments: {
+              'channelId': chat['id'],
+              'channelName': name,
+            },
+          );
+        } else {
+          Navigator.pushNamed(
+            context,
+            '/chat',
+            arguments: {
+              'chatId': chat['id'],
+              'chatName': name,
+              'chatAvatar': avatar,
+              'isGroup': isGroup,
+            },
+          );
+        }
+      },
     );
   }
 
@@ -514,7 +459,6 @@ class _MainAppScreenState extends State<MainAppScreen>
                 Navigator.pushNamed(context, '/create_group');
               },
             ),
-            // FIX #17: Separate route for channel creation
             _buildOptionTile(
               icon: Icons.campaign,
               label: AppLocalizations.get('new_channel'),
@@ -844,7 +788,30 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ✅ FORMAT TIME - Shows HH:mm for today, Yesterday, or date
   String _formatTime(dynamic time) {
-    return 'Now';
+    if (time == null) return '';
+
+    DateTime messageTime;
+    if (time is Timestamp) {
+      messageTime = time.toDate();
+    } else if (time is DateTime) {
+      messageTime = time;
+    } else {
+      return '';
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final messageDate = DateTime(messageTime.year, messageTime.month, messageTime.day);
+
+    if (messageDate == today) {
+      return DateFormat('HH:mm').format(messageTime);
+    } else if (messageDate == yesterday) {
+      return 'Yesterday';
+    } else {
+      return DateFormat('MMM d').format(messageTime);
+    }
   }
 }
