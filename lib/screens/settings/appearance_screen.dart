@@ -12,9 +12,16 @@ class AppearanceScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Appearance'),
+        title: const Text(
+          'Appearance',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -70,6 +77,9 @@ class AppearanceScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,18 +97,31 @@ class AppearanceScreen extends StatelessWidget {
                         children: [
                           Text(
                             'John Doe',
-                            style: Theme.of(context).textTheme.titleMedium,
+                            style: TextStyle(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           Text(
                             'Hey, how are you?',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: TextStyle(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white54
+                                  : Colors.black54,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     Text(
                       '2:30 PM',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white38
+                            : Colors.black38,
+                      ),
                     ),
                   ],
                 ),
@@ -128,14 +151,55 @@ class _ThemeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: isSelected ? Theme.of(context).primaryColor : Colors.grey),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: isSelected
-          ? Icon(Icons.check_circle, color: Theme.of(context).primaryColor)
-          : const Icon(Icons.circle_outlined, color: Colors.grey),
-      onTap: onTap,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? Theme.of(context).primaryColor.withOpacity(0.1)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected
+              ? Theme.of(context).primaryColor
+              : Colors.white.withOpacity(0.1),
+        ),
+      ),
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected
+                ? Theme.of(context).primaryColor
+                : Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black87,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white54
+                : Colors.black54,
+          ),
+        ),
+        trailing: isSelected
+            ? Icon(
+                Icons.check_circle,
+                color: Theme.of(context).primaryColor,
+              )
+            : Icon(
+                Icons.circle_outlined,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white24
+                    : Colors.grey,
+              ),
+        onTap: onTap,
+      ),
     );
   }
 }
