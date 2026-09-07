@@ -29,14 +29,38 @@ jobs:
           flutter-version: '3.22.0'
           channel: 'stable'
 
-      - name: Create Android project
+      - name: Create Android project with correct package
         run: |
+          # Save google-services.json
           cp android/app/google-services.json /tmp/google-services.json
+          
+          # Delete old android folder
           rm -rf android
+          
+          # Create flutter project with package com.example.aurachat
           flutter create . --platforms=android --org com.example
+          
+          # Restore google-services.json
           mkdir -p android/app
           cp /tmp/google-services.json android/app/
-          ls -la android/app/google-services.json
+          
+          echo "✅ Android project created with package: com.example.aurachat"
+          echo "Checking google-services.json:"
+          cat android/app/google-services.json | grep -o '"package_name": "[^"]*"'
+
+      - name: Force correct package name
+        run: |
+          # Fix any wrong package name in build.gradle
+          sed -i 's/com.example.aurachat_new/com.example.aurachat/g' android/app/build.gradle 2>/dev/null || true
+          
+          # Fix in AndroidManifest.xml if needed
+          sed -i 's/com.example.aurachat_new/com.example.aurachat/g' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
+          
+          echo "✅ Package name fixed to: com.example.aurachat"
+          
+          # Verify package name
+          echo "Checking package name in build.gradle:"
+          grep -n "applicationId" android/app/build.gradle || echo "applicationId not found"
 
       - name: Fix settings.gradle
         run: |
