@@ -33,7 +33,7 @@ jobs:
         run: |
           cp android/app/google-services.json /tmp/google-services.json
           rm -rf android
-          flutter create . --platforms=android --org com.example.aurachat
+          flutter create . --platforms=android --org com.example
           mkdir -p android/app
           cp /tmp/google-services.json android/app/
           ls -la android/app/google-services.json
