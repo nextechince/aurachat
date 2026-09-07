@@ -62,16 +62,16 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
   String? _replyingToContent;
   String? _replyingToSender;
 
-  // FIXED: Track pinned message to display at top
   Map<String, dynamic>? _pinnedMessage;
-  StreamSubscription<DocumentSnapshot>? _pinnedMessageSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pinnedMessageSub;
 
   static const Color _bgDark = Color(0xFF0A0A0F);
   static const Color _bgCard = Color(0xFF1a103c);
   static const Color _purple = Color(0xFF8B5CF6);
   static const Color _cyan = Color(0xFF06B6D4);
 
-  Stream<QuerySnapshot> get _messagesStream => FirebaseFirestore.instance
+  // ✅ FIXED: Correct type for messages stream
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _messagesStream => FirebaseFirestore.instance
       .collection('chats')
       .doc(widget.channelId)
       .collection('messages')
@@ -84,10 +84,9 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     _initAudioPlayer();
     _loadChannelInfo();
     _messageController.addListener(_onTextChanged);
-    _listenToPinnedMessage(); // FIXED: Start listening to pinned messages
+    _listenToPinnedMessage();
   }
 
-  /// FIXED: Listen to pinned message in real-time
   void _listenToPinnedMessage() {
     _pinnedMessageSub = FirebaseFirestore.instance
         .collection('chats')
@@ -108,7 +107,6 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
         setState(() => _pinnedMessage = null);
         return;
       }
-      // Fetch the actual message
       final msgDoc = await FirebaseFirestore.instance
           .collection('chats')
           .doc(widget.channelId)
@@ -123,7 +121,6 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     });
   }
 
-  /// FIXED: Rebuild when text changes to toggle send/mic button
   void _onTextChanged() {
     setState(() {});
   }
@@ -163,7 +160,6 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     }
   }
 
-  // FIXED: Navigate to channel info when tapping avatar or name
   void _goToChannelInfo() {
     Navigator.pushNamed(context, '/channel_info', arguments: {
       'chatId': widget.channelId,
@@ -188,7 +184,6 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
       final senderName = userData['display_name'] ?? userData['username'] ?? userData['name'] ?? 'Admin';
       final senderAvatar = userData['avatar_url'];
 
-      // Upload media if selected
       String? uploadedUrl;
       String? finalMediaType = mediaType;
       String? finalFileName = fileName;
@@ -540,7 +535,6 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
             Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 16),
             if (!isDeleted) ...[
-              // Quick reactions
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -724,9 +718,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     final sender = _pinnedMessage!['sender_name'] ?? 'Unknown';
 
     return GestureDetector(
-      onTap: () {
-        // Could scroll to the pinned message
-      },
+      onTap: () {},
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
@@ -794,7 +786,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // Header with channel avatar from Firestore - FIXED: Made tappable
+              // Header with channel avatar from Firestore
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
@@ -807,12 +799,10 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
-                    // FIXED: Wrap avatar and name in GestureDetector for tap
                     GestureDetector(
                       onTap: _goToChannelInfo,
                       child: Row(
                         children: [
-                          // Channel avatar from Firestore
                           _channelAvatarUrl != null && _channelAvatarUrl!.isNotEmpty
                             ? CircleAvatar(
                                 radius: 20,
@@ -850,12 +840,12 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                 ),
               ),
 
-              // FIXED: Pinned message banner at top
+              // Pinned message banner at top
               _buildPinnedMessageBanner(),
 
               // Messages
               Expanded(
-                child: StreamBuilder<QuerySnapshot>(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: _messagesStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
@@ -886,7 +876,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                       padding: const EdgeInsets.all(16),
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
-                        final msg = messages[index].data() as Map<String, dynamic>;
+                        final msg = messages[index].data();
                         msg['id'] = messages[index].id;
                         final isMe = msg['sender_id'] == userId;
                         final isDeleted = msg['deleted_for_everyone'] == true;
@@ -1276,8 +1266,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     _audioPlayer.dispose();
     _audioRecorder.dispose();
     _recordingTimer?.cancel();
-    _pinnedMessageSub?.cancel(); // FIXED: Cancel pinned message subscription
+    _pinnedMessageSub?.cancel();
     super.dispose();
   }
 }
- 
