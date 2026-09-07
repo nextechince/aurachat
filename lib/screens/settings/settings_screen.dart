@@ -773,6 +773,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
+                // ✅ APPEARANCE TILE ADDED HERE
+                _buildSettingTile(
+                  icon: Icons.palette_outlined,
+                  iconColor: const Color(0xFF8B5CF6),
+                  title: 'Appearance',
+                  subtitle: 'Theme, colors, and style',
+                  onTap: () => Navigator.pushNamed(context, '/appearance'),
+                ),
                 _buildSettingTile(
                   icon: Icons.notifications_none,
                   iconColor: const Color(0xFF06B6D4),
@@ -1007,4 +1015,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+}
+
+bool isVerified(String email) {
+  if (email.isEmpty) return false;
+  final cleanEmail = email.toLowerCase().trim();
+  return cleanEmail.endsWith('@aurachat.app');
 }
