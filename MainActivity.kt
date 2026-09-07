@@ -1,4 +1,4 @@
-package com.bothost.aurachat
+package com.messaging.aurachat
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 
