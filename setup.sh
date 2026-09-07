@@ -11,8 +11,8 @@ export PATH="$PATH:$PWD/flutter/bin"
 echo "🔧 Flutter version:"
 flutter --version
 
-# Pre-download Flutter dependencies
-flutter precache
+# Pre-download Flutter dependencies (web only to save time)
+flutter precache --web
 
 # ─── CREATE WEB FOLDER IF MISSING ────────────────────────────────
 echo "🌐 Setting up web..."
