@@ -34,6 +34,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     super.initState();
     _loadRecentSearches();
     _subscribeToOnlineStatus();
+    // Auto-focus after a short delay
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _searchFocusNode.requestFocus();
+    });
   }
 
   @override
@@ -128,8 +132,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       final searchTerm = query.trim().toLowerCase();
       debugPrint('Searching for: $searchTerm');
 
-      // FIXED: Search by username AND display_name separately, then merge results
-      // Firestore only supports one range query per composite index, so we do two queries
       final usernameSnapshot = await firestore
           .collection('users')
           .where('username', isGreaterThanOrEqualTo: searchTerm)
@@ -144,8 +146,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           .limit(20)
           .get();
 
-      // Also search by exact username match (case-insensitive via toLowerCase in app)
-      // And search by email prefix for email-based accounts
       final emailSnapshot = await firestore
           .collection('users')
           .where('email', isGreaterThanOrEqualTo: searchTerm)
@@ -153,11 +153,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           .limit(10)
           .get();
 
-      debugPrint('Username results: ${usernameSnapshot.docs.length}');
-      debugPrint('Display name results: ${displayNameSnapshot.docs.length}');
-      debugPrint('Email results: ${emailSnapshot.docs.length}');
-
-      // Merge all results, deduplicate by ID
       final allResults = <String, Map<String, dynamic>>{};
 
       for (final doc in usernameSnapshot.docs) {
@@ -181,8 +176,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         allResults[doc.id] = data;
       }
 
-      // Also do a simple contains check for usernames that might not match prefix
-      // This catches cases where username has the search term in the middle
       final allUsersSnapshot = await firestore
           .collection('users')
           .limit(100)
@@ -211,7 +204,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
       debugPrint('Total unique users found: ${filtered.length}');
 
-      // Search groups
       final groupsSnapshot = await firestore
           .collection('chats')
           .where('type', isEqualTo: 'group')
@@ -224,7 +216,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           .map((doc) => {'id': doc.id, ...doc.data(), 'search_type': 'group'})
           .toList();
 
-      // Search channels
       final channelsSnapshot = await firestore
           .collection('chats')
           .where('type', isEqualTo: 'channel')
@@ -270,7 +261,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
 
       final targetUserId = user['id'] as String;
 
-      // Check if a direct chat already exists
       final chatSnapshot = await firestore
           .collection('chats')
           .where('type', isEqualTo: 'direct')
@@ -290,21 +280,20 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       if (existingChatId != null) {
         if (mounted) {
           Navigator.pushNamed(
-          context,
-          '/chat',
-          arguments: {
-            'chatId': existingChatId,
-            'chatName': user['display_name'] ?? user['username'] ?? 'Chat',
-            'chatAvatar': user['avatar_url'],
-            'isGroup': false,
-          },
-        );
+            context,
+            '/chat',
+            arguments: {
+              'chatId': existingChatId,
+              'chatName': user['display_name'] ?? user['username'] ?? 'Chat',
+              'chatAvatar': user['avatar_url'],
+              'isGroup': false,
+            },
+          );
         }
         setState(() => _isLoading = false);
         return;
       }
 
-      // Create new direct chat
       final chatRef = firestore.collection('chats').doc();
       final chatId = chatRef.id;
 
@@ -400,7 +389,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     }
   }
 
-    void _viewPublicProfile(Map<String, dynamic> user) {
+  void _viewPublicProfile(Map<String, dynamic> user) {
     Navigator.pushNamed(
       context,
       '/public_profile',
@@ -432,158 +421,144 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0A0A0F),
-              Color(0xFF1a103c),
-              Color(0xFF0d1b2a),
-              Color(0xFF0A0A0F),
-            ],
-            stops: [0.0, 0.3, 0.7, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.08),
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white.withOpacity(0.7),
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    const Text(
-                      'Discover',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Glassmorphism Search Bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      backgroundColor: const Color(0xFF0A0A0F),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ─── Header ─────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
-                          width: 1,
+                          color: Colors.white.withOpacity(0.08),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF8B5CF6).withOpacity(0.1),
-                            blurRadius: 20,
-                            spreadRadius: -5,
-                          ),
-                        ],
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.search_rounded,
-                            color: Colors.white.withOpacity(0.4),
-                            size: 22,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              focusNode: _searchFocusNode,
-                              autofocus: true,
-                              style: const TextStyle(color: Colors.white, fontSize: 16),
-                              cursorColor: const Color(0xFF8B5CF6),
-                              decoration: InputDecoration(
-                                hintText: 'Search by username...',
-                                hintStyle: TextStyle(
-                                  color: Colors.white.withOpacity(0.3),
-                                  fontSize: 16,
-                                ),
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              onChanged: (value) {
-                                setState(() {});
-                                Future.delayed(const Duration(milliseconds: 500), () {
-                                  if (_searchController.text == value) {
-                                    _searchUsers(value);
-                                  }
-                                });
-                              },
-                            ),
-                          ),
-                          if (_searchController.text.isNotEmpty)
-                            GestureDetector(
-                              onTap: _clearSearch,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  color: Colors.white.withOpacity(0.6),
-                                  size: 16,
-                                ),
-                              ),
-                            ),
-                        ],
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white.withOpacity(0.7),
+                        size: 18,
                       ),
                     ),
                   ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Discover',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ─── Search Bar ─────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _searchFocusNode.hasFocus
+                        ? const Color(0xFF8B5CF6).withOpacity(0.5)
+                        : Colors.white.withOpacity(0.08),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.search_rounded,
+                      color: Colors.white.withOpacity(0.4),
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        autofocus: true,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                        cursorColor: const Color(0xFF8B5CF6),
+                        decoration: InputDecoration(
+                          hintText: 'Search by username...',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withOpacity(0.3),
+                            fontSize: 15,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                          isDense: true,
+                        ),
+                        onChanged: (value) {
+                          setState(() {});
+                          _searchDebounce(value);
+                        },
+                      ),
+                    ),
+                    if (_searchController.text.isNotEmpty)
+                      GestureDetector(
+                        onTap: _clearSearch,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: Colors.white.withOpacity(0.6),
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
+            ),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-              // Body Content
-              Expanded(
-                child: _buildBody(),
-              ),
-            ],
-          ),
+            // ─── Body ──────────────────────────────────────────────
+            Expanded(
+              child: _buildBody(),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  // ─── Debounce ────────────────────────────────────────────────────
+  Timer? _debounceTimer;
+
+  void _searchDebounce(String value) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _searchUsers(value);
+    });
+  }
+
+  // ─── Body ────────────────────────────────────────────────────────
   Widget _buildBody() {
-    // Loading state (initial)
+    // Loading state
     if (_isLoading && _users.isEmpty && _searchController.text.isNotEmpty) {
       return Center(
         child: Column(
@@ -653,12 +628,12 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       );
     }
 
-    // Empty search state (no query yet)
+    // Empty search state
     if (_searchController.text.isEmpty) {
       return _buildEmptyState();
     }
 
-    // No results found
+    // No results
     if (_users.isEmpty) {
       return Center(
         child: Column(
@@ -701,11 +676,14 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       );
     }
 
-    // Results list
+    // Results
     final totalResults = _users.length + _groups.length + _channels.length;
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: totalResults + (_users.isNotEmpty ? 1 : 0) + (_groups.isNotEmpty ? 1 : 0) + (_channels.isNotEmpty ? 1 : 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      itemCount: totalResults + 
+          (_users.isNotEmpty ? 1 : 0) + 
+          (_groups.isNotEmpty ? 1 : 0) + 
+          (_channels.isNotEmpty ? 1 : 0),
       itemBuilder: (context, index) {
         int currentIndex = 0;
 
@@ -713,20 +691,21 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         if (_users.isNotEmpty) {
           if (index == currentIndex) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 16, left: 4, top: 8),
+              padding: const EdgeInsets.only(bottom: 12, left: 4, top: 4),
               child: Text(
                 'Users',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.5),
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                 ),
               ),
             );
           }
           currentIndex++;
           if (index >= currentIndex && index < currentIndex + _users.length) {
-            return _buildGlowingUserCard(_users[index - currentIndex]);
+            return _buildUserCard(_users[index - currentIndex]);
           }
           currentIndex += _users.length;
         }
@@ -735,13 +714,14 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         if (_groups.isNotEmpty) {
           if (index == currentIndex) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 16, left: 4, top: 16),
+              padding: const EdgeInsets.only(bottom: 12, left: 4, top: 16),
               child: Text(
                 'Groups',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.5),
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                 ),
               ),
             );
@@ -757,13 +737,14 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         if (_channels.isNotEmpty) {
           if (index == currentIndex) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 16, left: 4, top: 16),
+              padding: const EdgeInsets.only(bottom: 12, left: 4, top: 16),
               child: Text(
                 'Channels',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.5),
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                 ),
               ),
             );
@@ -792,7 +773,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                 'Recent',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.5),
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
                 ),
@@ -897,7 +878,8 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     );
   }
 
-    Widget _buildGlowingUserCard(Map<String, dynamic> user) {
+  // ─── User Card ──────────────────────────────────────────────────
+  Widget _buildUserCard(Map<String, dynamic> user) {
     final userId = user['id'] as String? ?? '';
     final username = user['username'] as String? ?? 'Unknown';
     final displayName = user['display_name'] as String? ?? username;
@@ -907,176 +889,132 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     final isOnline = _isUserOnline(userId);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withOpacity(0.08),
-                  Colors.white.withOpacity(0.02),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isOnline
-                    ? const Color(0xFF06B6D4).withOpacity(0.3)
-                    : Colors.white.withOpacity(0.08),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: isOnline
-                      ? const Color(0xFF06B6D4).withOpacity(0.12)
-                      : const Color(0xFF8B5CF6).withOpacity(0.08),
-                  blurRadius: 20,
-                  spreadRadius: -5,
-                  offset: const Offset(0, 4),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isOnline
+              ? const Color(0xFF06B6D4).withOpacity(0.2)
+              : Colors.white.withOpacity(0.06),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          Stack(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: avatarUrl != null && avatarUrl.isNotEmpty
+                      ? null
+                      : const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                        ),
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Avatar with online indicator
-                Stack(
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: avatarUrl != null && avatarUrl.isNotEmpty
-                            ? null
-                            : const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Color(0xFF8B5CF6),
-                                  Color(0xFF06B6D4),
-                                ],
-                              ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF8B5CF6).withOpacity(0.25),
-                            blurRadius: 16,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: avatarUrl != null && avatarUrl.isNotEmpty
-                            ? Image.network(
-                                avatarUrl,
-                                width: 56,
-                                height: 56,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return _buildAvatarFallback(username);
-                                },
-                              )
-                            : _buildAvatarFallback(username),
+                child: ClipOval(
+                  child: avatarUrl != null && avatarUrl.isNotEmpty
+                      ? Image.network(
+                          avatarUrl,
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildAvatarFallback(username),
+                        )
+                      : _buildAvatarFallback(username),
+                ),
+              ),
+              if (isOnline)
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF06B6D4),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF0A0A0F),
+                        width: 2,
                       ),
                     ),
-                    if (isOnline)
-                      Positioned(
-                        right: 2,
-                        bottom: 2,
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF06B6D4),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF0A0A0F),
-                              width: 2.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF06B6D4).withOpacity(0.6),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                // User info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // FIX: Use VerifiedUsername instead of plain Text
-                      VerifiedUsername(
-                        username: displayName,
-                        email: email, 
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                        badgeSize: 14,
-                        spacing: 6,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '@$username',
-                        style: TextStyle(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (bio != null && bio.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          bio,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.4),
-                          ),
-                        ),
-                      ],
-                    ],
                   ),
                 ),
-                // Action buttons
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildActionButton(
-                      icon: Icons.person_outline,
-                      onPressed: () => _viewPublicProfile(user),
-                      tooltip: 'View Profile',
-                    ),
-                    const SizedBox(width: 8),
-                    _buildActionButton(
-                      icon: Icons.chat_bubble_outline,
-                      onPressed: () => _startChat(user),
-                      tooltip: 'Start Chat',
-                      isPrimary: true,
-                    ),
-                  ],
+            ],
+          ),
+          const SizedBox(width: 14),
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                VerifiedUsername(
+                  username: displayName,
+                  email: email,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                  badgeSize: 14,
+                  spacing: 6,
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  '@$username',
+                  style: TextStyle(
+                    color: const Color(0xFF8B5CF6).withOpacity(0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (bio != null && bio.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    bio,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.35),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-        ),
+          // Actions
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildActionButton(
+                icon: Icons.person_outline,
+                onPressed: () => _viewPublicProfile(user),
+                tooltip: 'View Profile',
+              ),
+              const SizedBox(width: 6),
+              _buildActionButton(
+                icon: Icons.chat_bubble_outline,
+                onPressed: () => _startChat(user),
+                tooltip: 'Start Chat',
+                isPrimary: true,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
+  // ─── Group/Channel Card ──────────────────────────────────────────
   Widget _buildGroupChannelCard(Map<String, dynamic> item, {required bool isGroup}) {
     final name = item['name'] ?? 'Unknown';
     final description = item['description'] ?? '';
@@ -1084,152 +1022,141 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     final memberCount = item['member_count'] ?? (item['participants'] as List?)?.length ?? 0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isGroup 
+              ? const Color(0xFF8B5CF6).withOpacity(0.15)
+              : Colors.orange.withOpacity(0.15),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withOpacity(0.08),
-                  Colors.white.withOpacity(0.02),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isGroup 
-                    ? const Color(0xFF8B5CF6).withOpacity(0.3)
-                    : Colors.orange.withOpacity(0.3),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: avatarUrl != null && avatarUrl.isNotEmpty
-                        ? null
-                        : LinearGradient(
-                            colors: isGroup 
-                                ? [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)]
-                                : [Colors.orange, Colors.red],
-                          ),
-                  ),
-                  child: ClipOval(
-                    child: avatarUrl != null && avatarUrl.isNotEmpty
-                        ? Image.network(avatarUrl, width: 56, height: 56, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _buildAvatarFallback(name))
-                        : _buildAvatarFallback(name),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isGroup 
-                                  ? const Color(0xFF8B5CF6).withOpacity(0.2)
-                                  : Colors.orange.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              isGroup ? 'GROUP' : 'CHANNEL',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: isGroup ? const Color(0xFF8B5CF6) : Colors.orange,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$memberCount members',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.4),
-                        ),
-                      ),
-                      if (description.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          description,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.4),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => isGroup ? _joinGroup(item) : _joinChannel(item),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: isGroup 
-                            ? [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)]
-                            : [Colors.orange, Colors.red],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
+              shape: BoxShape.circle,
+              gradient: avatarUrl != null && avatarUrl.isNotEmpty
+                  ? null
+                  : LinearGradient(
+                      colors: isGroup 
+                          ? [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)]
+                          : [Colors.orange, Colors.red],
                     ),
-                    child: Text(
-                      isGroup ? 'Join' : 'Subscribe',
+            ),
+            child: ClipOval(
+              child: avatarUrl != null && avatarUrl.isNotEmpty
+                  ? Image.network(
+                      avatarUrl,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _buildAvatarFallback(name),
+                    )
+                  : _buildAvatarFallback(name),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isGroup 
+                            ? const Color(0xFF8B5CF6).withOpacity(0.15)
+                            : Colors.orange.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isGroup ? 'GROUP' : 'CHANNEL',
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w700,
+                          color: isGroup ? const Color(0xFF8B5CF6) : Colors.orange,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      name,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
-                        fontSize: 13,
+                        fontSize: 15,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$memberCount members',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.4),
                   ),
                 ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.35),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-        ),
+          GestureDetector(
+            onTap: () => isGroup ? _joinGroup(item) : _joinChannel(item),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isGroup 
+                      ? [const Color(0xFF8B5CF6), const Color(0xFF06B6D4)]
+                      : [Colors.orange, Colors.red],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                isGroup ? 'Join' : 'Subscribe',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  // ─── Helpers ──────────────────────────────────────────────────────
   Widget _buildAvatarFallback(String username) {
     return Container(
-      width: 56,
-      height: 56,
+      width: 50,
+      height: 50,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF8B5CF6),
-            Color(0xFF06B6D4),
-          ],
+          colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
         ),
         shape: BoxShape.circle,
       ),
@@ -1239,7 +1166,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            fontSize: 18,
           ),
         ),
       ),
@@ -1257,33 +1184,24 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(9),
           decoration: BoxDecoration(
             color: isPrimary
-                ? const Color(0xFF8B5CF6).withOpacity(0.15)
-                : Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(14),
+                ? const Color(0xFF8B5CF6).withOpacity(0.12)
+                : Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isPrimary
-                  ? const Color(0xFF8B5CF6).withOpacity(0.3)
-                  : Colors.white.withOpacity(0.08),
+                  ? const Color(0xFF8B5CF6).withOpacity(0.2)
+                  : Colors.white.withOpacity(0.06),
             ),
-            boxShadow: isPrimary
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF8B5CF6).withOpacity(0.15),
-                      blurRadius: 8,
-                      spreadRadius: -2,
-                    ),
-                  ]
-                : null,
           ),
           child: Icon(
             icon,
             size: 18,
             color: isPrimary
                 ? const Color(0xFF8B5CF6)
-                : Colors.white.withOpacity(0.6),
+                : Colors.white.withOpacity(0.5),
           ),
         ),
       ),
@@ -1301,17 +1219,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: const Color(0xFF8B5CF6).withOpacity(0.3),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF8B5CF6).withOpacity(0.1),
-              blurRadius: 16,
-              spreadRadius: -4,
-            ),
-          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
