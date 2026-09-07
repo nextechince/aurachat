@@ -2,14 +2,16 @@
   "version": 2,
   "builds": [
     {
-      "src": "build/web/**",
-      "use": "@vercel/static"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build/web"
+      }
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/build/web/$1"
-    }
+  "buildCommand": "flutter build web --release",
+  "outputDirectory": "build/web",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
