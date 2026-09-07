@@ -13,7 +13,6 @@ flutter --version
 
 # Pre-download Flutter dependencies
 flutter precache
-flutter config --no-android
 
 # ─── CREATE WEB FOLDER IF MISSING ────────────────────────────────
 echo "🌐 Setting up web..."
@@ -30,7 +29,7 @@ flutter pub get
 # ─── BUILD WEB ─────────────────────────────────────────────────────
 echo "🔨 Building Flutter Web..."
 flutter config --enable-web
-flutter build web --release
+flutter build web --release --no-wasm-dry-run
 
 # ─── VERIFY BUILD ──────────────────────────────────────────────────
 echo "📁 Build output:"
@@ -55,9 +54,5 @@ cp -f onboarding.html build/web/ 2>/dev/null || echo "⚠️ onboarding.html not
 
 echo "📁 Final build/web contents:"
 ls -la build/web/
-
-# ─── CREATE TEST FILE ─────────────────────────────────────────────
-echo "🔍 Creating test file..."
-echo "AURA Chat is live!" > build/web/test.txt
 
 echo "✅ Build complete!"
