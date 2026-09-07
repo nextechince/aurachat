@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ─── BACKGROUND ──────────────────────────────────────────── */
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .splash {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px;
+        }
+
+        /* ─── LOGO WITH GLOW ────────────────────────────────────── */
+        .logo-wrapper {
+            opacity: 0;
+            transform: scale(0.3);
+            animation: fadeInScale 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @keyframes fadeInScale {
+            0% {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .logo-container {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .logo-container::before {
+            content: '';
+            position: absolute;
+            inset: -20px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.15), transparent 70%);
+            animation: glowExpand 2s ease-in-out infinite;
+        }
+
+        @keyframes glowExpand {
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.4;
+            }
+        }
+
+        .logo-container .glow-1 {
+            position: absolute;
+            inset: -10px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.2), transparent 70%);
+            animation: glowPulse1 2.5s ease-in-out infinite;
+        }
+
+        .logo-container .glow-2 {
+            position: absolute;
+            inset: -30px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(6, 182, 212, 0.1), transparent 70%);
+            animation: glowPulse2 3s ease-in-out infinite;
+        }
+
+        @keyframes glowPulse1 {
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.6;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes glowPulse2 {
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.4;
+            }
+            50% {
+                transform: scale(1.15);
+                opacity: 0.8;
+            }
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            position: relative;
+            z-index: 2;
+            box-shadow:
+                0 0 60px rgba(139, 92, 246, 0.2),
+                0 0 120px rgba(139, 92, 246, 0.1);
+        }
+
+        .logo-container .logo-fallback {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: 900;
+            color: #fff;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* ─── APP NAME ────────────────────────────────────────────── */
+        .app-name {
+            margin-top: 32px;
+            opacity: 0;
+            animation: fadeIn 1s ease-out 0.3s forwards;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .app-name .aura {
+            font-size: 48px;
+            font-weight: 900;
+            letter-spacing: 12px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .app-name .chat {
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 8px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 4px;
+            display: block;
+        }
+
+        /* ─── LOADER ────────────────────────────────────────────────── */
+        .loader {
+            margin-top: 56px;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.5s forwards;
+        }
+
+        .loader .spinner {
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(139, 92, 246, 0.15);
+            border-top-color: #8B5CF6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-status {
+            margin-top: 12px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.15);
+            letter-spacing: 0.5px;
+            font-weight: 400;
+        }
+
+        .loading-status .dot {
+            display: inline-block;
+            animation: dotPulse 1.4s ease-in-out infinite;
+        }
+        .loading-status .dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .loading-status .dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes dotPulse {
+            0%,
+            80%,
+            100% {
+                opacity: 0;
+            }
+            40% {
+                opacity: 1;
+            }
+        }
+
+        /* ─── VERSION ──────────────────────────────────────────────── */
+        .version {
+            position: absolute;
+            bottom: 32px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.06);
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 640px) {
+            .logo-container {
+                width: 110px;
+                height: 110px;
+            }
+            .app-name .aura {
+                font-size: 36px;
+                letter-spacing: 8px;
+            }
+            .app-name .chat {
+                font-size: 12px;
+                letter-spacing: 6px;
+            }
+            .loader .spinner {
+                width: 32px;
+                height: 32px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .logo-container {
+                width: 90px;
+                height: 90px;
+            }
+            .app-name .aura {
+                font-size: 28px;
+                letter-spacing: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="splash">
+
+        <!-- ─── LOGO ─────────────────────────────────────────────── -->
+        <div class="logo-wrapper">
+            <div class="logo-container">
+                <div class="glow-1"></div>
+                <div class="glow-2"></div>
+                <img
+                    src="assets/images/logo.png"
+                    alt="AURA Logo"
+                    onerror="this.style.display='none'; this.parentElement.querySelector('.logo-fallback').style.display='flex';"
+                />
+                <div class="logo-fallback">A</div>
+            </div>
+        </div>
+
+        <!-- ─── APP NAME ─────────────────────────────────────────── -->
+        <div class="app-name">
+            <span class="aura">AURA</span>
+            <span class="chat">CHAT</span>
+        </div>
+
+        <!-- ─── LOADER ───────────────────────────────────────────── -->
+        <div class="loader">
+            <div class="spinner"></div>
+            <div class="loading-status">
+                <span id="statusText">Loading</span>
+                <span class="dot">.</span>
+                <span class="dot">.</span>
+                <span class="dot">.</span>
+            </div>
+        </div>
+
+        <div class="version">v3.0.0 · AURA Chat</div>
+
+    </div>
+
+    <script>
+        const statusText = document.getElementById('statusText');
+        const statusMessages = ['Loading', 'Connecting', 'Checking account', 'Ready'];
+
+        let index = 0;
+        const statusInterval = setInterval(() => {
+            index = (index + 1) % statusMessages.length;
+            if (!statusText.textContent.includes('.')) {
+                statusText.textContent = statusMessages[index];
+            }
+        }, 800);
+
+        setTimeout(() => {
+            clearInterval(statusInterval);
+            statusText.textContent = 'Ready';
+
+            // Check if user is logged in (localStorage)
+            const isLoggedIn = localStorage.getItem('aura_user') !== null;
+
+            setTimeout(() => {
+                if (isLoggedIn) {
+                    window.location.href = '/web/index.html';
+                } else {
+                    window.location.href = '/onboarding.html';
+                }
+            }, 600);
+
+        }, 3000);
+
+        console.log('🚀 AURA Chat — Splash Screen');
+    </script>
+
+</body>
+</html>
