@@ -1,0 +1,9 @@
+{
+    "name": "AURA Chat",
+    "short_name": "AURA",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0A0A0F",
+    "theme_color": "#8B5CF6",
+    "icons": []
+}
