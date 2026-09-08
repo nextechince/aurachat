@@ -112,7 +112,6 @@
 
         .code-container input:focus {
             border-color: #8B5CF6;
-            border-color: rgba(139, 92, 246, 0.5);
         }
 
         .error-msg {
@@ -308,8 +307,11 @@
         let codeSent = false;
         let isLoading = false;
         let sentEmail = '';
-        let tempUserId = '';
+        let userId = '';
+        let isExistingUser = false;
+        let existingUserData = null;
         let resendCountdown = 0;
+        let resendLoading = false;
 
         // ─── HELPERS ──────────────────────────────────────────────────
         function showError(msg) {
@@ -324,6 +326,17 @@
             isLoading = loading;
             mainBtn.disabled = loading;
             mainBtn.innerHTML = loading ? '<span class="spinner"></span>' : (codeSent ? 'Verify Code' : 'Continue');
+        }
+
+        function setResendLoading(loading) {
+            resendLoading = loading;
+            if (loading) {
+                resendBtn.innerHTML = '<span class="small-spinner"></span>';
+                resendBtn.disabled = true;
+            } else {
+                resendBtn.textContent = 'Resend Code';
+                resendBtn.disabled = false;
+            }
         }
 
         function startResendTimer() {
@@ -345,7 +358,30 @@
             setTimeout(tickResendTimer, 1000);
         }
 
-        // ─── STEP 1: SEND CODE & CREATE USER ────────────────────────
+        // ─── SAVE TO LOCAL STORAGE ──────────────────────────────────
+        function saveToLocalStorage(key, value) {
+            try {
+                localStorage.setItem(key, value);
+            } catch (e) {
+                console.warn('Could not save to localStorage:', e);
+            }
+        }
+
+        function getFromLocalStorage(key) {
+            try {
+                return localStorage.getItem(key);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function removeFromLocalStorage(key) {
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {}
+        }
+
+        // ─── STEP 1: Send OTP ──────────────────────────────────────
         async function sendCode() {
             const email = emailInput.value.trim().toLowerCase();
 
@@ -358,84 +394,77 @@
             setLoading(true);
 
             try {
-                // ─── CREATE USER IN FIREBASE ──────────────────────────
-                // Generate a temporary password
-                const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
-                
-                let userCredential;
-                try {
-                    // Try to create user
-                    userCredential = await auth.createUserWithEmailAndPassword(email, tempPassword);
-                    console.log('✅ User created:', userCredential.user.uid);
-                } catch (authError) {
-                    if (authError.code === 'auth/email-already-in-use') {
-                        // User exists - try to sign in
-                        try {
-                            // Check if user has profile
-                            const userDoc = await db.collection('users').doc(email).get();
-                            if (userDoc.exists) {
-                                // Already has profile - redirect to chats
-                                window.location.href = '/chats.html';
-                                return;
-                            }
-                            // Send OTP for existing user
-                            await sendOtp(email, 'existing');
-                            return;
-                        } catch (signInError) {
-                            showError('Account exists but login failed. Please try again.');
-                            setLoading(false);
-                            return;
-                        }
-                    } else {
-                        throw authError;
-                    }
+                // ─── CHECK FIRESTORE FOR EXISTING USER ──────────────
+                const snapshot = await db.collection('users')
+                    .where('email', '==', email)
+                    .limit(1)
+                    .get();
+
+                let userIdTemp;
+                let isExisting = false;
+                let existingData = null;
+
+                if (!snapshot.empty) {
+                    isExisting = true;
+                    existingData = snapshot.docs[0].data();
+                    existingData.id = snapshot.docs[0].id;
+                    userIdTemp = snapshot.docs[0].id;
+                } else {
+                    // NEW USER - generate temp ID
+                    userIdTemp = 'mock_' + Date.now();
                 }
 
-                // ─── SEND OTP ──────────────────────────────────────────
-                await sendOtp(email, 'new', userCredential.user.uid);
+                // ─── SAVE TO LOCALSTORAGE ────────────────────────────
+                saveToLocalStorage('pending_email_user_id', userIdTemp);
+                saveToLocalStorage('pending_email', email);
+                if (existingData) {
+                    saveToLocalStorage('pending_phone', existingData.phone || '');
+                    saveToLocalStorage('pending_username', existingData.username || '');
+                    saveToLocalStorage('pending_display_name', existingData.display_name || '');
+                    saveToLocalStorage('pending_bio', existingData.bio || '');
+                    saveToLocalStorage('pending_avatar', existingData.avatar_url || '');
+                }
+
+                // ─── CALL BACKEND TO SEND OTP ────────────────────────
+                const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, userId: userIdTemp })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Switch to code view
+                    codeSent = true;
+                    sentEmail = email;
+                    userId = userIdTemp;
+                    isExistingUser = isExisting;
+                    existingUserData = existingData;
+
+                    emailGroup.style.display = 'none';
+                    codeGroup.style.display = 'flex';
+                    resendArea.style.display = 'block';
+                    pageTitle.textContent = 'Verify Email';
+                    pageSubtitle.textContent = `Enter the 6-digit code sent to ${email}`;
+                    mainBtn.textContent = 'Verify Code';
+                    setLoading(false);
+
+                    codeInputs[0].focus();
+                    startResendTimer();
+                } else {
+                    showError(data.details || data.error || 'Failed to send OTP');
+                    setLoading(false);
+                }
 
             } catch (e) {
                 console.error('Send code error:', e);
-                showError('Failed to send code: ' + e.message);
+                showError('Network error: ' + e.message);
                 setLoading(false);
             }
         }
 
-        async function sendOtp(email, userType, uid) {
-            // Call backend to send OTP
-            const userId = uid || 'temp_' + Date.now();
-
-            const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, userId })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                // Switch to code view
-                codeSent = true;
-                sentEmail = email;
-                tempUserId = userId;
-
-                emailGroup.style.display = 'none';
-                codeGroup.style.display = 'flex';
-                resendArea.style.display = 'block';
-                pageTitle.textContent = 'Verify Email';
-                pageSubtitle.textContent = `Enter the 6-digit code sent to ${email}`;
-                mainBtn.textContent = 'Verify Code';
-                setLoading(false);
-
-                codeInputs[0].focus();
-                startResendTimer();
-            } else {
-                showError(data.details || data.error || 'Failed to send OTP');
-                setLoading(false);
-            }
-        }
-
-        // ─── STEP 2: VERIFY CODE ────────────────────────────────────
+        // ─── STEP 2: Verify Code ──────────────────────────────────
         async function verifyCode() {
             const code = codeInputs.map(inp => inp.value).join('');
 
@@ -451,7 +480,7 @@
                 const response = await fetch(BACKEND_URL + '/api/auth/verify-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: tempUserId, code })
+                    body: JSON.stringify({ userId, code })
                 });
 
                 const data = await response.json();
@@ -464,22 +493,50 @@
                     return;
                 }
 
-                // ─── CODE VERIFIED ✅ ──────────────────────────────────
-                // User is already logged in (we created account earlier)
-                // Or if existing user, they're already logged in
+                // ─── ✅ CODE VERIFIED ──────────────────────────────────
 
-                // Check if user has profile
-                const user = auth.currentUser;
-                if (user) {
-                    const userDoc = await db.collection('users').doc(user.uid).get();
+                // ─── SAVE USER TO LOCALSTORAGE ──────────────────────
+                saveToLocalStorage('mock_user_id', userId);
+                saveToLocalStorage('mock_email', sentEmail);
+
+                if (isExistingUser && existingUserData) {
+                    saveToLocalStorage('mock_phone', existingUserData.phone || '');
+                    saveToLocalStorage('mock_username', existingUserData.username || '');
+                    saveToLocalStorage('mock_display_name', existingUserData.display_name || '');
+                    saveToLocalStorage('mock_bio', existingUserData.bio || '');
+                    saveToLocalStorage('mock_avatar', existingUserData.avatar_url || '');
+
+                    // Update Firestore
+                    await db.collection('users').doc(userId).update({
+                        email_verified: true,
+                        updated_at: new Date().toISOString()
+                    });
+                }
+
+                // ─── CLEAN UP PENDING ─────────────────────────────────
+                removeFromLocalStorage('pending_email_user_id');
+                removeFromLocalStorage('pending_email');
+                removeFromLocalStorage('pending_phone');
+                removeFromLocalStorage('pending_username');
+                removeFromLocalStorage('pending_display_name');
+                removeFromLocalStorage('pending_bio');
+                removeFromLocalStorage('pending_avatar');
+
+                setLoading(false);
+
+                // ─── CHECK IF USER HAS PROFILE ──────────────────────
+                try {
+                    const userDoc = await db.collection('users').doc(userId).get();
                     if (userDoc.exists) {
                         const data = userDoc.data();
                         if (data?.username && data?.display_name) {
-                            // Has full profile → go to chats
+                            // Has profile → go to chats
                             window.location.href = '/chats.html';
                             return;
                         }
                     }
+                } catch (e) {
+                    console.warn('Profile check error:', e);
                 }
 
                 // No profile → go to setup
@@ -494,23 +551,23 @@
 
         // ─── RESEND CODE ─────────────────────────────────────────────
         async function resendCode() {
-            if (resendCountdown > 0 || !sentEmail) return;
+            if (resendCountdown > 0 || !sentEmail || !userId) return;
 
             hideError();
-            setLoading(true);
+            setResendLoading(true);
 
             try {
                 const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: sentEmail, userId: tempUserId })
+                    body: JSON.stringify({ email: sentEmail, userId })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
                     startResendTimer();
-                    // Show success
+                    // Show success snackbar
                     const snackbar = document.createElement('div');
                     snackbar.style.cssText = `
                         position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -528,7 +585,7 @@
                 showError('Network error: ' + e.message);
             }
 
-            setLoading(false);
+            setResendLoading(false);
         }
 
         // ─── EVENT LISTENERS ─────────────────────────────────────────
@@ -601,13 +658,32 @@
                         }
                     }
                 }).catch(() => {
-                    // If error, go to setup
                     window.location.href = '/setup_profile.html';
                 });
             }
         });
 
-        console.log('📧 AURA Chat — Email Verification (Fixed)');
+        // ─── CHECK LOCALSTORAGE FOR PENDING ─────────────────────────
+        const pendingUserId = getFromLocalStorage('pending_email_user_id');
+        if (pendingUserId) {
+            // User was in the middle of verification
+            const pendingEmail = getFromLocalStorage('pending_email');
+            if (pendingEmail) {
+                sentEmail = pendingEmail;
+                userId = pendingUserId;
+                codeSent = true;
+                emailGroup.style.display = 'none';
+                codeGroup.style.display = 'flex';
+                resendArea.style.display = 'block';
+                pageTitle.textContent = 'Verify Email';
+                pageSubtitle.textContent = `Enter the 6-digit code sent to ${pendingEmail}`;
+                mainBtn.textContent = 'Verify Code';
+                startResendTimer();
+            }
+        }
+
+        console.log('📧 AURA Chat — Email Verification Screen');
+        console.log('🔗 Backend URL:', BACKEND_URL);
     </script>
 
 </body>
