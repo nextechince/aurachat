@@ -45,6 +45,8 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
         }
 
         /* ─── HEADER ────────────────────────────────────────────── */
@@ -513,6 +515,15 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
+        // ─── LOCAL STORAGE HELPERS ────────────────────────────────────
+        function getLocal(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+
+        function setLocal(key, value) {
+            try { localStorage.setItem(key, value); } catch (e) {}
+        }
+
         // ─── DOM REFS ──────────────────────────────────────────────────
         const chatList = document.getElementById('chatList');
         const fabBtn = document.getElementById('fabBtn');
@@ -522,25 +533,59 @@
         let userId = '';
         let chats = [];
 
-        // ─── AUTH CHECK ──────────────────────────────────────────────
+        // ─── ✅ FIXED: Get user ID from Firebase OR localStorage ──────
+        function getUserId() {
+            const user = auth.currentUser;
+            if (user) return user.uid;
+            return getLocal('mock_user_id') || null;
+        }
+
+        // ─── ✅ FIXED: Auth check with fallback ───────────────────────
         auth.onAuthStateChanged(function(user) {
-            if (user) {
-                userId = user.uid;
+            const id = getUserId();
+            if (id) {
+                userId = id;
+                console.log('✅ User found in chats:', userId);
                 loadChats();
             } else {
-                // Check localStorage for mock user
-                const mockUser = localStorage.getItem('aura_user');
-                if (mockUser) {
-                    userId = mockUser;
+                // Check localStorage one more time
+                const mockId = getLocal('mock_user_id');
+                if (mockId) {
+                    userId = mockId;
+                    console.log('✅ User from localStorage:', userId);
                     loadChats();
                 } else {
+                    console.log('⚠️ No user found, redirecting to email_verification');
                     window.location.href = '/email_verification.html';
                 }
             }
         });
 
+        // ─── Also check on load (in case auth event already fired) ──
+        setTimeout(function() {
+            if (!userId) {
+                const id = getUserId();
+                if (id) {
+                    userId = id;
+                    console.log('✅ User found (delayed):', userId);
+                    loadChats();
+                }
+            }
+        }, 500);
+
         // ─── LOAD CHATS ──────────────────────────────────────────────
         async function loadChats() {
+            if (!userId) {
+                chatList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <h3>Not authenticated</h3>
+                        <p>Please log in again</p>
+                    </div>
+                `;
+                return;
+            }
+
             chatList.innerHTML = `
                 <div class="loader">
                     <div class="spinner"></div>
@@ -568,10 +613,8 @@
                     const participants = data.participants || [];
                     const deletedFor = data.deleted_for || [];
 
-                    // Skip if deleted for this user
                     if (deletedFor.includes(userId)) continue;
 
-                    // Get chat name for direct chats
                     let chatName = data.name || 'Unknown';
                     let chatAvatar = data.avatar_url || null;
 
@@ -587,7 +630,6 @@
                         }
                     }
 
-                    // Get unread count
                     const unreadSnapshot = await db.collection('chats')
                         .doc(chatId)
                         .collection('messages')
@@ -596,7 +638,6 @@
                         .get();
                     const unreadCount = unreadSnapshot.size;
 
-                    // Get last message
                     const lastMsgSnapshot = await db.collection('chats')
                         .doc(chatId)
                         .collection('messages')
@@ -681,7 +722,6 @@
 
         // ─── OPEN CHAT ──────────────────────────────────────────────
         function openChat(chatId) {
-            // Find chat data
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
                 if (chat.isChannel) {
@@ -776,7 +816,6 @@
             document.getElementById('menuModal').classList.remove('show');
         }
 
-        // Close modal on overlay click
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', function(e) {
                 if (e.target === this) {
@@ -790,19 +829,26 @@
             closeMenu();
             try {
                 await auth.signOut();
-                localStorage.removeItem('aura_user');
-                localStorage.removeItem('aura_username');
-                localStorage.removeItem('aura_has_profile');
+                localStorage.clear();
                 window.location.href = '/onboarding.html';
             } catch (e) {
                 console.error('Logout error:', e);
-                // Force logout anyway
                 localStorage.clear();
                 window.location.href = '/onboarding.html';
             }
         }
 
-        console.log('💬 AURA Chat — Chats List (HTML)');
+        // ─── CHECK LOCALSTORAGE ON LOAD ─────────────────────────────
+        // If user has mock_user_id but no Firebase auth, we still load
+        const mockId = getLocal('mock_user_id');
+        if (mockId && !auth.currentUser) {
+            userId = mockId;
+            console.log('✅ User from localStorage (chats):', userId);
+            loadChats();
+        }
+
+        console.log('💬 AURA Chat — Chats List (Fixed)');
+        console.log('🔑 User ID source: Firebase Auth + localStorage');
     </script>
 
 </body>
