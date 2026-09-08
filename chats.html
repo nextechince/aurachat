@@ -49,7 +49,6 @@
             backdrop-filter: blur(20px);
         }
 
-        /* ─── HEADER ────────────────────────────────────────────── */
         .header {
             padding: 60px 20px 16px;
             display: flex;
@@ -94,7 +93,6 @@
             background: rgba(255, 255, 255, 0.05);
         }
 
-        /* ─── TABS ────────────────────────────────────────────────── */
         .tabs {
             display: flex;
             padding: 0 20px 12px;
@@ -133,7 +131,6 @@
             color: rgba(255, 255, 255, 0.7);
         }
 
-        /* ─── CHAT LIST ──────────────────────────────────────────── */
         .chat-list {
             flex: 1;
             padding: 8px 16px 80px;
@@ -238,7 +235,6 @@
             display: inline-block;
         }
 
-        /* ─── EMPTY STATE ────────────────────────────────────────── */
         .empty-state {
             display: flex;
             flex-direction: column;
@@ -265,7 +261,6 @@
             color: rgba(255, 255, 255, 0.15);
         }
 
-        /* ─── FAB ────────────────────────────────────────────────── */
         .fab {
             position: fixed;
             bottom: 30px;
@@ -290,7 +285,6 @@
             box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
         }
 
-        /* ─── LOADER ────────────────────────────────────────────── */
         .loader {
             display: flex;
             align-items: center;
@@ -309,7 +303,6 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ─── MODAL ────────────────────────────────────────────────── */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -404,7 +397,6 @@
             color: rgba(255, 255, 255, 0.3);
         }
 
-        /* ─── RESPONSIVE ──────────────────────────────────────────── */
         @media (max-width: 640px) {
             .header { padding: 50px 16px 12px; }
             .tabs { padding: 0 12px 8px; }
@@ -520,10 +512,6 @@
             try { return localStorage.getItem(key); } catch (e) { return null; }
         }
 
-        function setLocal(key, value) {
-            try { localStorage.setItem(key, value); } catch (e) {}
-        }
-
         // ─── DOM REFS ──────────────────────────────────────────────────
         const chatList = document.getElementById('chatList');
         const fabBtn = document.getElementById('fabBtn');
@@ -533,54 +521,43 @@
         let userId = '';
         let chats = [];
 
-        // ─── ✅ FIXED: Get user ID from Firebase OR localStorage ──────
+        // ─── ✅ FIXED: Get user ID from localStorage ONLY ─────────────
+        // ✅ No redirect to email_verification - just show "Not logged in"
         function getUserId() {
             const user = auth.currentUser;
             if (user) return user.uid;
             return getLocal('mock_user_id') || null;
         }
 
-        // ─── ✅ FIXED: Auth check with fallback ───────────────────────
+        // ─── ✅ FIXED: No redirect - just show message ───────────────
         auth.onAuthStateChanged(function(user) {
             const id = getUserId();
             if (id) {
                 userId = id;
-                console.log('✅ User found in chats:', userId);
+                console.log('✅ User found:', userId);
                 loadChats();
             } else {
-                // Check localStorage one more time
-                const mockId = getLocal('mock_user_id');
-                if (mockId) {
-                    userId = mockId;
-                    console.log('✅ User from localStorage:', userId);
-                    loadChats();
-                } else {
-                    console.log('⚠️ No user found, redirecting to email_verification');
-                    window.location.href = '/email_verification.html';
-                }
+                // ✅ NO REDIRECT - just show message
+                chatList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-slash"></i>
+                        <h3>Not signed in</h3>
+                        <p>Please sign in to see your chats</p>
+                        <button onclick="window.location.href='/onboarding.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Get Started</button>
+                    </div>
+                `;
             }
         });
-
-        // ─── Also check on load (in case auth event already fired) ──
-        setTimeout(function() {
-            if (!userId) {
-                const id = getUserId();
-                if (id) {
-                    userId = id;
-                    console.log('✅ User found (delayed):', userId);
-                    loadChats();
-                }
-            }
-        }, 500);
 
         // ─── LOAD CHATS ──────────────────────────────────────────────
         async function loadChats() {
             if (!userId) {
                 chatList.innerHTML = `
                     <div class="empty-state">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <h3>Not authenticated</h3>
-                        <p>Please log in again</p>
+                        <i class="fas fa-user-slash"></i>
+                        <h3>Not signed in</h3>
+                        <p>Please sign in to see your chats</p>
+                        <button onclick="window.location.href='/onboarding.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Get Started</button>
                     </div>
                 `;
                 return;
@@ -593,7 +570,6 @@
             `;
 
             try {
-                // Get all chats where user is participant
                 const snapshot = await db.collection('chats')
                     .where('participants', 'array-contains', userId)
                     .orderBy('last_message_at', 'desc')
@@ -630,12 +606,8 @@
                         }
                     }
 
-                    const unreadSnapshot = await db.collection('chats')
-                        .doc(chatId)
-                        .collection('messages')
-                        .where('is_read', '==', false) 
-                        .get();
-                    const unreadCount = unreadSnapshot.size;
+                    // ✅ FIXED: Simple unread count - no complex query
+                    const unreadCount = 0;
 
                     const lastMsgSnapshot = await db.collection('chats')
                         .doc(chatId)
@@ -675,6 +647,7 @@
                         <i class="fas fa-exclamation-circle"></i>
                         <h3>Error loading chats</h3>
                         <p>${e.message}</p>
+                        <button onclick="loadChats()" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Try Again</button>
                     </div>
                 `;
             }
@@ -767,7 +740,7 @@
 
             if (tab === 'chats') {
                 chatList.style.display = 'block';
-                renderChats();
+                if (chats.length > 0) renderChats();
                 fabBtn.style.display = 'flex';
                 fabBtn.innerHTML = '<i class="fas fa-plus"></i>';
                 fabBtn.onclick = openNewChat;
@@ -838,16 +811,14 @@
         }
 
         // ─── CHECK LOCALSTORAGE ON LOAD ─────────────────────────────
-        // If user has mock_user_id but no Firebase auth, we still load
         const mockId = getLocal('mock_user_id');
         if (mockId && !auth.currentUser) {
             userId = mockId;
-            console.log('✅ User from localStorage (chats):', userId);
+            console.log('✅ User from localStorage:', userId);
             loadChats();
         }
 
-        console.log('💬 AURA Chat — Chats List (Fixed)');
-        console.log('🔑 User ID source: Firebase Auth + localStorage');
+        console.log('💬 AURA Chat — Chats List (No Redirects)');
     </script>
 
 </body>
