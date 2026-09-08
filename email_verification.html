@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verify Email - AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .container {
+            position: relative;
+            z-index: 2;
+            max-width: 420px;
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.5;
+            margin-bottom: 48px;
+        }
+
+        .input-group { margin-bottom: 24px; }
+
+        .input-group input {
+            width: 100%;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            color: #fff;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border 0.3s ease;
+        }
+
+        .input-group input:focus { border-color: #8B5CF6; }
+        .input-group input::placeholder { color: rgba(255, 255, 255, 0.3); }
+
+        .code-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .code-container input {
+            width: 52px;
+            height: 64px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            color: #fff;
+            outline: none;
+            transition: border 0.3s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .code-container input:focus {
+            border-color: #8B5CF6;
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        .error-msg {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 12px;
+            color: #ef4444;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .error-msg.show { display: flex; align-items: center; gap: 8px; }
+
+        .btn {
+            width: 100%;
+            height: 56px;
+            border: none;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            color: #fff;
+        }
+
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(139, 92, 246, 0.35); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .btn .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .resend-area {
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .resend-area .timer {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 14px;
+        }
+
+        .resend-area .resend-btn {
+            background: none;
+            border: none;
+            color: #8B5CF6;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .resend-area .resend-btn:hover { text-decoration: underline; }
+        .resend-area .resend-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .resend-area .small-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: #8B5CF6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: #8B5CF6;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            margin-top: 8px;
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+
+        .back-btn:hover { text-decoration: underline; }
+
+        .terms-link {
+            display: block;
+            text-align: center;
+            margin-top: 16px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+            text-decoration: none;
+        }
+
+        .terms-link:hover { text-decoration: underline; }
+
+        @media (max-width: 640px) {
+            .title { font-size: 28px; }
+            .code-container input { width: 44px; height: 56px; font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="container">
+
+        <!-- ─── TITLE ────────────────────────────────────────────── -->
+        <div class="title" id="pageTitle">Welcome to AURA</div>
+        <div class="subtitle" id="pageSubtitle">
+            Enter your email to get started. We'll send you a verification code.
+        </div>
+
+        <!-- ─── EMAIL INPUT ──────────────────────────────────────── -->
+        <div class="input-group" id="emailGroup">
+            <input type="email" id="emailInput" placeholder="your@email.com" />
+        </div>
+
+        <!-- ─── CODE INPUT ───────────────────────────────────────── -->
+        <div class="code-container" id="codeGroup" style="display:none;">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" id="code0" />
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" id="code1" />
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" id="code2" />
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" id="code3" />
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" id="code4" />
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]" id="code5" />
+        </div>
+
+        <!-- ─── ERROR ────────────────────────────────────────────── -->
+        <div class="error-msg" id="errorMsg">
+            <i class="fas fa-exclamation-circle"></i>
+            <span id="errorText">Invalid code</span>
+        </div>
+
+        <!-- ─── BUTTON ───────────────────────────────────────────── -->
+        <button class="btn" id="mainBtn">Continue</button>
+
+        <!-- ─── RESEND ───────────────────────────────────────────── -->
+        <div class="resend-area" id="resendArea" style="display:none;">
+            <div id="resendTimer" class="timer">Resend in 60 seconds</div>
+            <button class="resend-btn" id="resendBtn" style="display:none;">Resend Code</button>
+            <button class="back-btn" id="backBtn">Use different email</button>
+        </div>
+
+        <!-- ─── TERMS ────────────────────────────────────────────── -->
+        <a href="#" class="terms-link" id="termsLink">Terms of Service & Privacy Policy</a>
+
+    </div>
+
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
+            authDomain: "aurachat-85f54.firebaseapp.com",
+            projectId: "aurachat-85f54",
+            storageBucket: "aurachat-85f54.firebasestorage.app",
+            messagingSenderId: "539789121540",
+            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // ─── DOM REFS ──────────────────────────────────────────────────
+        const emailInput = document.getElementById('emailInput');
+        const codeInputs = [0,1,2,3,4,5].map(i => document.getElementById('code' + i));
+        const emailGroup = document.getElementById('emailGroup');
+        const codeGroup = document.getElementById('codeGroup');
+        const mainBtn = document.getElementById('mainBtn');
+        const errorMsg = document.getElementById('errorMsg');
+        const errorText = document.getElementById('errorText');
+        const resendArea = document.getElementById('resendArea');
+        const resendTimer = document.getElementById('resendTimer');
+        const resendBtn = document.getElementById('resendBtn');
+        const backBtn = document.getElementById('backBtn');
+        const pageTitle = document.getElementById('pageTitle');
+        const pageSubtitle = document.getElementById('pageSubtitle');
+        const termsLink = document.getElementById('termsLink');
+
+        // ─── STATE ─────────────────────────────────────────────────────
+        let codeSent = false;
+        let isLoading = false;
+        let sentEmail = '';
+        let userId = '';
+        let isExistingUser = false;
+        let existingUserData = null;
+        let resendCountdown = 0;
+        let resendLoading = false;
+
+        const BACKEND_URL = 'https://aurachat-backend-5utu.onrender.com';
+
+        // ─── HELPERS ──────────────────────────────────────────────────
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorMsg.classList.add('show');
+            setTimeout(() => errorMsg.classList.remove('show'), 5000);
+        }
+
+        function hideError() { errorMsg.classList.remove('show'); }
+
+        function setLoading(loading) {
+            isLoading = loading;
+            mainBtn.disabled = loading;
+            mainBtn.innerHTML = loading ? '<span class="spinner"></span>' : (codeSent ? 'Verify Code' : 'Continue');
+        }
+
+        function setResendLoading(loading) {
+            resendLoading = loading;
+            if (loading) {
+                resendBtn.innerHTML = '<span class="small-spinner"></span>';
+                resendBtn.disabled = true;
+            } else {
+                resendBtn.textContent = 'Resend Code';
+                resendBtn.disabled = false;
+            }
+        }
+
+        function startResendTimer() {
+            if (resendCountdown > 0) return;
+            resendCountdown = 60;
+            resendBtn.style.display = 'none';
+            resendTimer.style.display = 'block';
+            tickResendTimer();
+        }
+
+        function tickResendTimer() {
+            if (resendCountdown <= 0) {
+                resendTimer.style.display = 'none';
+                resendBtn.style.display = 'inline-block';
+                return;
+            }
+            resendTimer.textContent = `Resend in ${resendCountdown} seconds`;
+            resendCountdown--;
+            setTimeout(tickResendTimer, 1000);
+        }
+
+        // ─── STEP 1: SEND CODE ──────────────────────────────────────
+        async function sendCode() {
+            const email = emailInput.value.trim().toLowerCase();
+
+            if (!email || !email.includes('@') || !email.includes('.')) {
+                showError('Enter a valid email address');
+                return;
+            }
+
+            hideError();
+            setLoading(true);
+
+            try {
+                // Check Firestore for existing user
+                const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+
+                let isExisting = false;
+                let existingData = null;
+                let userIdTemp;
+
+                if (!snapshot.empty) {
+                    isExisting = true;
+                    existingData = snapshot.docs[0].data();
+                    existingData.id = snapshot.docs[0].id;
+                    userIdTemp = snapshot.docs[0].id;
+                } else {
+                    userIdTemp = 'mock_' + Date.now();
+                }
+
+                // Save to localStorage
+                localStorage.setItem('pending_email_user_id', userIdTemp);
+                localStorage.setItem('pending_email', email);
+                if (existingData) {
+                    localStorage.setItem('pending_phone', existingData.phone || '');
+                    localStorage.setItem('pending_username', existingData.username || '');
+                    localStorage.setItem('pending_display_name', existingData.display_name || '');
+                    localStorage.setItem('pending_bio', existingData.bio || '');
+                    localStorage.setItem('pending_avatar', existingData.avatar_url || '');
+                }
+
+                // Call backend to send OTP
+                const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, userId: userIdTemp })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Switch to code view
+                    codeSent = true;
+                    sentEmail = email;
+                    userId = userIdTemp;
+                    isExistingUser = isExisting;
+                    existingUserData = existingData;
+
+                    emailGroup.style.display = 'none';
+                    codeGroup.style.display = 'flex';
+                    resendArea.style.display = 'block';
+                    pageTitle.textContent = 'Verify Email';
+                    pageSubtitle.textContent = `Enter the 6-digit code sent to ${email}`;
+                    mainBtn.textContent = 'Verify Code';
+                    setLoading(false);
+
+                    codeInputs[0].focus();
+                    startResendTimer();
+                } else {
+                    showError(data.details || data.error || 'Failed to send OTP');
+                    setLoading(false);
+                }
+
+            } catch (e) {
+                showError('Network error: ' + e.message);
+                setLoading(false);
+            }
+        }
+
+        // ─── STEP 2: VERIFY CODE ────────────────────────────────────
+        async function verifyCode() {
+            const code = codeInputs.map(inp => inp.value).join('');
+
+            if (code.length !== 6) {
+                showError('Enter all 6 digits');
+                return;
+            }
+
+            hideError();
+            setLoading(true);
+
+            try {
+                const response = await fetch(BACKEND_URL + '/api/auth/verify-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, code })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showError(data.error || 'Invalid code');
+                    codeInputs.forEach(inp => inp.value = '');
+                    codeInputs[0].focus();
+                    setLoading(false);
+                    return;
+                }
+
+                // ─── BACKEND CONFIRMED ──────────────────────────────────
+                // Save to localStorage (like SharedPreferences)
+                localStorage.setItem('mock_user_id', userId);
+                localStorage.setItem('mock_email', sentEmail);
+
+                if (isExistingUser && existingUserData) {
+                    localStorage.setItem('mock_phone', existingUserData.phone || '');
+                    localStorage.setItem('mock_username', existingUserData.username || '');
+                    localStorage.setItem('mock_display_name', existingUserData.display_name || '');
+                    localStorage.setItem('mock_bio', existingUserData.bio || '');
+                    localStorage.setItem('mock_avatar', existingUserData.avatar_url || '');
+
+                    // Update Firestore
+                    await db.collection('users').doc(userId).update({
+                        email_verified: true,
+                        updated_at: new Date().toISOString()
+                    });
+                }
+
+                // Clean up pending
+                localStorage.removeItem('pending_email_user_id');
+                localStorage.removeItem('pending_email');
+                localStorage.removeItem('pending_phone');
+                localStorage.removeItem('pending_username');
+                localStorage.removeItem('pending_display_name');
+                localStorage.removeItem('pending_bio');
+                localStorage.removeItem('pending_avatar');
+
+                // Redirect to setup profile
+                window.location.href = '/setup_profile.html';
+
+            } catch (e) {
+                showError('Network error: ' + e.message);
+                setLoading(false);
+            }
+        }
+
+        // ─── RESEND CODE ─────────────────────────────────────────────
+        async function resendCode() {
+            if (resendCountdown > 0 || !sentEmail || !userId) return;
+
+            hideError();
+            setResendLoading(true);
+
+            try {
+                const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: sentEmail, userId })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    startResendTimer();
+                    // Show success snackbar
+                    const snackbar = document.createElement('div');
+                    snackbar.style.cssText = `
+                        position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        background: #10B981; color: white; padding: 12px 24px;
+                        border-radius: 12px; font-weight: 600; z-index: 999;
+                        animation: fadeIn 0.3s ease;
+                    `;
+                    snackbar.textContent = '✅ New code sent!';
+                    document.body.appendChild(snackbar);
+                    setTimeout(() => snackbar.remove(), 3000);
+                } else {
+                    showError(data.details || data.error || 'Failed to resend');
+                }
+            } catch (e) {
+                showError('Network error: ' + e.message);
+            }
+
+            setResendLoading(false);
+        }
+
+        // ─── EVENT LISTENERS ─────────────────────────────────────────
+
+        // Main button
+        mainBtn.addEventListener('click', function() {
+            if (isLoading) return;
+            if (codeSent) {
+                verifyCode();
+            } else {
+                sendCode();
+            }
+        });
+
+        // Resend button
+        resendBtn.addEventListener('click', resendCode);
+
+        // Back button (use different email)
+        backBtn.addEventListener('click', function() {
+            codeSent = false;
+            codeGroup.style.display = 'none';
+            emailGroup.style.display = 'block';
+            resendArea.style.display = 'none';
+            pageTitle.textContent = 'Welcome to AURA';
+            pageSubtitle.textContent = "Enter your email to get started. We'll send you a verification code.";
+            mainBtn.textContent = 'Continue';
+            codeInputs.forEach(inp => inp.value = '');
+            hideError();
+        });
+
+        // Terms link
+        termsLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = '/terms.html';
+        });
+
+        // ─── CODE INPUT AUTO-FOCUS ──────────────────────────────────
+        codeInputs.forEach((input, index) => {
+            input.addEventListener('input', function() {
+                if (this.value.length === 1 && index < 5) {
+                    codeInputs[index + 1].focus();
+                }
+                hideError();
+            });
+
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && this.value === '' && index > 0) {
+                    codeInputs[index - 1].focus();
+                }
+                if (e.key === 'Enter') {
+                    mainBtn.click();
+                }
+            });
+
+            // Restrict to numbers only
+            input.addEventListener('keypress', function(e) {
+                if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+            });
+        });
+
+        // ─── ENTER KEY ON EMAIL ──────────────────────────────────────
+        emailInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') mainBtn.click();
+        });
+
+        // ─── CHECK IF ALREADY LOGGED IN ──────────────────────────────
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                // Check if user has profile
+                db.collection('users').doc(user.uid).get().then((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        if (data?.username && data?.display_name) {
+                            window.location.href = '/chats.html';
+                        } else {
+                            window.location.href = '/setup_profile.html';
+                        }
+                    }
+                }).catch(() => {});
+            }
+        });
+
+        console.log('📧 AURA Chat — Email Verification Screen (HTML)');
+    </script>
+
+</body>
+</html>
