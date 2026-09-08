@@ -13,14 +13,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
-        /* ... same styles as before ... */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: #0A0A0F;
             color: #ffffff;
             min-height: 100vh;
         }
+
         .bg {
             position: fixed;
             top: 0;
@@ -34,6 +35,7 @@
                 radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
                 #0A0A0F;
         }
+
         .app {
             position: relative;
             z-index: 2;
@@ -45,16 +47,18 @@
             display: flex;
             flex-direction: column;
         }
-        /* ─── HEADER ────────────────────────────────────────────── */
+
         .header {
-            padding: 16px 24px;
+            padding: 60px 20px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            flex-shrink: 0;
         }
+
         .header .title {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 900;
             letter-spacing: 4px;
             background: linear-gradient(135deg, #8B5CF6, #06B6D4);
@@ -62,10 +66,12 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
+
         .header-actions {
             display: flex;
             gap: 4px;
         }
+
         .header-actions button {
             background: none;
             border: none;
@@ -77,10 +83,11 @@
             transition: background 0.3s ease;
             font-family: 'Inter', sans-serif;
         }
+
         .header-actions button:hover {
             background: rgba(255, 255, 255, 0.05);
         }
-        /* ─── TABS ────────────────────────────────────────────────── */
+
         .tabs {
             display: flex;
             padding: 0 20px 12px;
@@ -88,7 +95,9 @@
             background: rgba(10, 10, 15, 0.92);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            flex-shrink: 0;
         }
+
         .tab {
             flex: 1;
             padding: 10px 0;
@@ -105,25 +114,29 @@
             text-decoration: none;
             display: block;
         }
+
         .tab.active {
             color: #fff;
             background: linear-gradient(135deg, #8B5CF6, #06B6D4);
             box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
         }
+
         .tab:hover:not(.active) {
             color: rgba(255, 255, 255, 0.7);
         }
+
         .tab i { margin-right: 6px; }
-        /* ─── MY STATUS ──────────────────────────────────────────── */
+
         .my-status {
-            padding: 8px 24px;
+            padding: 16px 24px;
             display: flex;
             align-items: center;
             gap: 14px;
             cursor: pointer;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            padding-bottom: 12px;
+            flex-shrink: 0;
         }
+
         .my-status .avatar {
             width: 60px;
             height: 60px;
@@ -137,15 +150,18 @@
             overflow: hidden;
             border: 2px solid rgba(139, 92, 246, 0.5);
         }
+
         .my-status .avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
+
         .my-status .avatar .placeholder {
             font-size: 28px;
             color: rgba(255, 255, 255, 0.7);
         }
+
         .my-status .avatar .add-btn {
             position: absolute;
             bottom: 0;
@@ -162,6 +178,7 @@
             color: #fff;
             cursor: pointer;
         }
+
         .my-status .info { flex: 1; }
         .my-status .info .name {
             font-size: 16px;
@@ -172,6 +189,7 @@
             font-size: 13px;
             color: rgba(255, 255, 255, 0.4);
         }
+
         .section-title {
             padding: 12px 24px 8px;
             font-size: 12px;
@@ -179,11 +197,13 @@
             color: rgba(255, 255, 255, 0.4);
             letter-spacing: 1px;
         }
+
         .status-list {
             flex: 1;
             overflow-y: auto;
             padding: 8px 24px 80px;
         }
+
         .status-item {
             display: flex;
             align-items: center;
@@ -192,7 +212,9 @@
             cursor: pointer;
             border-bottom: 1px solid rgba(255, 255, 255, 0.02);
         }
+
         .status-item:hover { background: rgba(255, 255, 255, 0.02); }
+
         .status-item .avatar {
             width: 56px;
             height: 56px;
@@ -205,21 +227,25 @@
             overflow: hidden;
             border: 2px solid rgba(6, 182, 212, 0.3);
         }
+
         .status-item .avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
+
         .status-item .avatar .placeholder {
             font-size: 20px;
             color: rgba(255, 255, 255, 0.7);
         }
+
         .status-item .info { flex: 1; }
         .status-item .info .name {
             font-size: 15px;
             font-weight: 600;
             color: #fff;
         }
+
         .status-item .info .sub {
             font-size: 12px;
             color: rgba(255, 255, 255, 0.4);
@@ -227,7 +253,9 @@
             align-items: center;
             gap: 8px;
         }
+
         .status-item .info .sub i { font-size: 12px; color: rgba(255, 255, 255, 0.2); }
+
         .status-item .preview {
             width: 50px;
             height: 50px;
@@ -239,11 +267,13 @@
             justify-content: center;
             flex-shrink: 0;
         }
+
         .status-item .preview img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
+
         .status-item .preview .text-preview {
             font-size: 10px;
             color: #fff;
@@ -251,6 +281,7 @@
             text-align: center;
             line-height: 1.2;
         }
+
         .empty-state {
             display: flex;
             flex-direction: column;
@@ -259,26 +290,31 @@
             height: 50vh;
             text-align: center;
         }
+
         .empty-state i {
             font-size: 64px;
             color: rgba(255, 255, 255, 0.06);
             margin-bottom: 16px;
         }
+
         .empty-state h3 {
             font-size: 16px;
             color: rgba(255, 255, 255, 0.3);
         }
+
         .empty-state p {
             font-size: 13px;
             color: rgba(255, 255, 255, 0.15);
             margin-top: 4px;
         }
+
         .loader {
             display: flex;
             align-items: center;
             justify-content: center;
             height: 50vh;
         }
+
         .loader .spinner {
             width: 40px;
             height: 40px;
@@ -287,7 +323,9 @@
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
+
         @keyframes spin { to { transform: rotate(360deg); } }
+
         .fab {
             position: fixed;
             bottom: 30px;
@@ -306,10 +344,12 @@
             align-items: center;
             justify-content: center;
         }
+
         .fab:hover {
             transform: translateY(-3px);
             box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
         }
+
         .modal-overlay {
             display: none;
             position: fixed;
@@ -322,7 +362,9 @@
             align-items: flex-end;
             justify-content: center;
         }
+
         .modal-overlay.show { display: flex; }
+
         .modal {
             background: #1a103c;
             border-radius: 24px 24px 0 0;
@@ -333,10 +375,12 @@
             overflow-y: auto;
             animation: slideUp 0.3s ease;
         }
+
         @keyframes slideUp {
             0% { transform: translateY(100%); }
             100% { transform: translateY(0); }
         }
+
         .modal-handle {
             width: 40px;
             height: 4px;
@@ -344,6 +388,7 @@
             border-radius: 2px;
             margin: 0 auto 16px;
         }
+
         .modal-item {
             display: flex;
             align-items: center;
@@ -353,7 +398,9 @@
             cursor: pointer;
             transition: background 0.2s ease;
         }
+
         .modal-item:hover { background: rgba(255, 255, 255, 0.05); }
+
         .modal-item .icon {
             width: 44px;
             height: 44px;
@@ -363,20 +410,24 @@
             justify-content: center;
             font-size: 18px;
         }
+
         .modal-item .icon.purple {
             background: rgba(139, 92, 246, 0.2);
             color: #8B5CF6;
         }
+
         .modal-item .label {
             flex: 1;
             font-size: 15px;
             color: #fff;
         }
+
         @media (max-width: 640px) {
             .app { max-width: 100%; }
-            .header { padding: 12px 16px; }
-            .my-status { padding: 8px 16px; }
+            .header { padding: 50px 16px 12px; }
+            .my-status { padding: 12px 16px; }
             .status-list { padding: 8px 16px 70px; }
+            .tabs { padding: 0 12px 8px; }
             .fab { bottom: 20px; right: 20px; width: 50px; height: 50px; }
         }
     </style>
@@ -413,8 +464,25 @@
             </a>
         </div>
 
-        <!-- ─── CONTENT ────────────────────────────────────────────── -->
-        <div id="statusContent">
+        <!-- ─── MY STATUS ──────────────────────────────────────────── -->
+        <div class="my-status" id="myStatus">
+            <div class="avatar" id="myAvatar">
+                <span class="placeholder"><i class="fas fa-user"></i></span>
+                <div class="add-btn" onclick="event.stopPropagation();showAddStatusOptions()">
+                    <i class="fas fa-plus"></i>
+                </div>
+            </div>
+            <div class="info">
+                <div class="name">My Status</div>
+                <div class="sub" id="myStatusSub">Tap + to add status</div>
+            </div>
+        </div>
+
+        <!-- ─── SECTION TITLE ──────────────────────────────────────── -->
+        <div class="section-title">Recent Updates</div>
+
+        <!-- ─── STATUS LIST ────────────────────────────────────────── -->
+        <div class="status-list" id="statusList">
             <div class="loader">
                 <div class="spinner"></div>
             </div>
@@ -487,7 +555,9 @@
         }
 
         // ─── DOM REFS ──────────────────────────────────────────────────
-        const statusContent = document.getElementById('statusContent');
+        const statusList = document.getElementById('statusList');
+        const myStatusSub = document.getElementById('myStatusSub');
+        const myAvatar = document.getElementById('myAvatar');
 
         // ─── STATE ─────────────────────────────────────────────────────
         let userId = '';
@@ -499,7 +569,7 @@
             return getLocal('mock_user_id') || null;
         }
 
-        // ─── ✅ FIXED: AUTH CHECK - NO REDIRECT ──────────────────────
+        // ─── ✅ FIXED: NO REDIRECTS! Just show content or message ────
         auth.onAuthStateChanged(function(user) {
             const id = getUserId();
             if (id) {
@@ -507,62 +577,64 @@
                 console.log('✅ User found:', userId);
                 loadStatuses();
             } else {
-                // ✅ NO REDIRECT - Just show "Not signed in" message
-                statusContent.innerHTML = `
+                // ✅ NO REDIRECT - Just show message
+                statusList.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-user-slash"></i>
                         <h3>Not signed in</h3>
-                        <p>Please sign in to see status updates</p>
+                        <p>Sign in to see and post status updates</p>
                         <button onclick="window.location.href='/email_verification.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Sign In</button>
                     </div>
                 `;
+                myStatusSub.textContent = 'Sign in to add status';
             }
         });
 
         // ─── LOAD STATUSES ────────────────────────────────────────────
         async function loadStatuses() {
-            if (!userId) return;
-
-            statusContent.innerHTML = `
-                <div class="my-status">
-                    <div class="avatar">
-                        <span class="placeholder"><i class="fas fa-user"></i></span>
-                        <div class="add-btn"><i class="fas fa-plus"></i></div>
-                    </div>
-                    <div class="info">
-                        <div class="name">My Status</div>
-                        <div class="sub">Tap + to add status</div>
-                    </div>
-                </div>
-                <div class="section-title">Recent Updates</div>
-                <div class="status-list">
-                    <div class="loader"><div class="spinner"></div></div>
-                </div>
-            `;
+            statusList.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
 
             try {
-                // Load my statuses
-                const mySnapshot = await db.collection('statuses')
-                    .where('user_id', '==', userId)
-                    .where('expires_at', '>', new Date())
-                    .orderBy('created_at', 'desc')
-                    .get();
+                // 1. Load my status
+                if (userId) {
+                    const mySnapshot = await db.collection('statuses')
+                        .where('user_id', '==', userId)
+                        .where('expires_at', '>', new Date())
+                        .orderBy('created_at', 'desc')
+                        .get();
 
-                // Update my status
-                if (!mySnapshot.empty) {
-                    const latest = mySnapshot.docs[0].data();
-                    const timeAgo = getTimeAgo(latest.created_at.toDate());
-                    const viewCount = latest.view_count || 0;
-                    const myStatusEl = document.querySelector('.my-status .sub');
-                    if (myStatusEl) myStatusEl.textContent = `${timeAgo} • 👁 ${viewCount}`;
+                    if (!mySnapshot.empty) {
+                        const latest = mySnapshot.docs[0].data();
+                        const timeAgo = getTimeAgo(latest.created_at.toDate());
+                        const viewCount = latest.view_count || 0;
+                        myStatusSub.textContent = `${timeAgo} • 👁 ${viewCount}`;
+                        
+                        if (latest.media_url) {
+                            const img = document.createElement('img');
+                            img.src = latest.media_url;
+                            img.style.width = '100%';
+                            img.style.height = '100%';
+                            img.style.objectFit = 'cover';
+                            myAvatar.innerHTML = '';
+                            myAvatar.appendChild(img);
+                            const addBtn = document.createElement('div');
+                            addBtn.className = 'add-btn';
+                            addBtn.innerHTML = '<i class="fas fa-plus"></i>';
+                            addBtn.onclick = (e) => { e.stopPropagation(); showAddStatusOptions(); };
+                            myAvatar.appendChild(addBtn);
+                        }
+                    }
                 }
 
-                // Load contact statuses
-                const contactsSnapshot = await db.collection('users').doc(userId).collection('contacts').get();
-                const contactIds = contactsSnapshot.docs.map(doc => doc.id);
+                // 2. Load contacts statuses
+                let contactIds = [];
+                if (userId) {
+                    const contactsSnapshot = await db.collection('users').doc(userId).collection('contacts').get();
+                    contactIds = contactsSnapshot.docs.map(doc => doc.id);
+                }
 
-                if (contactIds.length === 0) {
-                    document.querySelector('.status-list').innerHTML = `
+                if (contactIds.length === 0 && userId) {
+                    statusList.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-users"></i>
                             <h3>No contacts yet</h3>
@@ -572,6 +644,18 @@
                     return;
                 }
 
+                if (!userId) {
+                    statusList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-user-slash"></i>
+                            <h3>Sign in to see statuses</h3>
+                            <p>Connect with friends and see their updates</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Fetch statuses from contacts
                 const statusSnapshot = await db.collection('statuses')
                     .where('user_id', 'in', contactIds.slice(0, 10))
                     .where('expires_at', '>', new Date())
@@ -579,11 +663,11 @@
                     .get();
 
                 if (statusSnapshot.empty) {
-                    document.querySelector('.status-list').innerHTML = `
+                    statusList.innerHTML = `
                         <div class="empty-state">
                             <i class="fas fa-circle"></i>
                             <h3>No status updates</h3>
-                            <p>Save contacts to see their status</p>
+                            <p>Your contacts haven't posted any statuses yet</p>
                         </div>
                     `;
                     return;
@@ -613,7 +697,7 @@
                     }
 
                     html += `
-                        <div class="status-item" onclick="alert('View status')">
+                        <div class="status-item" onclick="alert('View status from ${username}')">
                             <div class="avatar">
                                 ${avatar ? `<img src="${avatar}" />` : `<span class="placeholder">${username.charAt(0).toUpperCase()}</span>`}
                             </div>
@@ -630,15 +714,16 @@
                     `;
                 }
 
-                document.querySelector('.status-list').innerHTML = html;
+                statusList.innerHTML = html;
 
             } catch (e) {
                 console.error('Load statuses error:', e);
-                document.querySelector('.status-list').innerHTML = `
+                statusList.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-circle"></i>
                         <h3>Error loading statuses</h3>
                         <p>${e.message}</p>
+                        <button onclick="loadStatuses()" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Try Again</button>
                     </div>
                 `;
             }
@@ -660,6 +745,11 @@
         }
 
         function showAddStatusOptions() {
+            if (!userId) {
+                alert('Please sign in to add status');
+                window.location.href = '/email_verification.html';
+                return;
+            }
             document.getElementById('addStatusModal').classList.add('show');
         }
 
@@ -671,6 +761,7 @@
             document.getElementById(id).classList.remove('show');
         }
 
+        // ─── CLOSE MODAL ON OVERLAY CLICK ────────────────────────────
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', function(e) {
                 if (e.target === this) {
@@ -687,8 +778,7 @@
             loadStatuses();
         }
 
-        console.log('📸 AURA Chat — Status Screen');
-        console.log('🔑 User ID source: Firebase Auth + localStorage');
+        console.log('📸 AURA Chat — Status Screen (With Firebase, No Redirects)');
     </script>
 
 </body>
