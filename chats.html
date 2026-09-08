@@ -633,8 +633,7 @@
                     const unreadSnapshot = await db.collection('chats')
                         .doc(chatId)
                         .collection('messages')
-                        .where('is_read', '==', false)
-                        .where('sender_id', '!=', userId)
+                        .where('is_read', '==', false) 
                         .get();
                     const unreadCount = unreadSnapshot.size;
 
