@@ -6,7 +6,11 @@
     <title>AURA Chat</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -154,13 +158,6 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .loading-status {
-            margin-top: 12px;
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.15);
-            letter-spacing: 0.5px;
-        }
-
         .version {
             position: absolute;
             bottom: 32px;
@@ -197,20 +194,19 @@
 
         <div class="loader">
             <div class="spinner"></div>
-            <div class="loading-status">Loading...</div>
         </div>
 
-        <div class="version">v1.0.0 · AURA Chat</div>
+        <div class="version">v3.0.0 · AURA Chat</div>
     </div>
 
     <script>
-        // ─── SPLASH: Just show for 2.5s then redirect to Flutter App ───
-        // The Flutter app will handle auth (splash_screen.dart)
+        // ─── SPLASH: Show for 2.5s then go to chats ──────────────
+        // This page is ONLY for logged-in users (redirected from index.html)
         setTimeout(() => {
-            window.location.href = '/web/index.html';
+            window.location.href = '/chats.html';
         }, 2500);
 
-        console.log('🚀 AURA Chat — Redirecting to Flutter App');
+        console.log('🚀 AURA Chat — Splash Screen (Logged In)');
     </script>
 
 </body>
