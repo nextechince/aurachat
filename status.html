@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Status - AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .app {
+            position: relative;
+            z-index: 2;
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ─── HEADER ────────────────────────────────────────────── */
+        .header {
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .header .title {
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .header-actions button {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 12px;
+            transition: background 0.3s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .header-actions button:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* ─── MY STATUS ──────────────────────────────────────────── */
+        .my-status {
+            padding: 8px 24px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            padding-bottom: 12px;
+        }
+
+        .my-status .avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            flex-shrink: 0;
+            overflow: hidden;
+            border: 2px solid rgba(139, 92, 246, 0.5);
+        }
+
+        .my-status .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .my-status .avatar .placeholder {
+            font-size: 28px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .my-status .avatar .add-btn {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #8B5CF6;
+            border: 2px solid #0A0A0F;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .my-status .info {
+            flex: 1;
+        }
+
+        .my-status .info .name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .my-status .info .sub {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .my-status .info .sub .views {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 12px;
+        }
+
+        .section-title {
+            padding: 12px 24px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 1px;
+        }
+
+        /* ─── STATUS LIST ────────────────────────────────────────── */
+        .status-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 24px 80px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 8px 0;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .status-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .status-item .avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+            border: 2px solid rgba(6, 182, 212, 0.3);
+        }
+
+        .status-item .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .status-item .avatar .placeholder {
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .status-item .info {
+            flex: 1;
+        }
+
+        .status-item .info .name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .status-item .info .sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-item .info .sub i {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        .status-item .preview {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(139, 92, 246, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .status-item .preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .status-item .preview .text-preview {
+            font-size: 10px;
+            color: #fff;
+            padding: 4px;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        /* ─── EMPTY STATE ────────────────────────────────────────── */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 50vh;
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            color: rgba(255, 255, 255, 0.06);
+            margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .empty-state p {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.15);
+            margin-top: 4px;
+        }
+
+        /* ─── LOADER ────────────────────────────────────────────── */
+        .loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 50vh;
+        }
+
+        .loader .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(139, 92, 246, 0.1);
+            border-top-color: #8B5CF6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ─── FAB ────────────────────────────────────────────────── */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fab:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
+        }
+
+        /* ─── MODAL ────────────────────────────────────────────────── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: #1a103c;
+            border-radius: 24px 24px 0 0;
+            padding: 20px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            0% { transform: translateY(100%); }
+            100% { transform: translateY(0); }
+        }
+
+        .modal-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin: 0 auto 16px;
+        }
+
+        .modal-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .modal-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .modal-item .icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .modal-item .icon.purple {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8B5CF6;
+        }
+
+        .modal-item .label {
+            flex: 1;
+            font-size: 15px;
+            color: #fff;
+        }
+
+        .status-viewer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #000;
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+        }
+
+        .status-viewer.show { display: flex; }
+
+        .status-viewer .progress {
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-viewer .progress .fill {
+            height: 100%;
+            background: #fff;
+            width: 0%;
+            animation: progressAnim 5s linear forwards;
+        }
+
+        @keyframes progressAnim {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        .status-viewer .content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 80px;
+        }
+
+        .status-viewer .content img {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 16px;
+            object-fit: contain;
+        }
+
+        .status-viewer .content .text-status {
+            padding: 40px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            border-radius: 24px;
+            font-size: 28px;
+            font-weight: 600;
+            color: #fff;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        .status-viewer .footer {
+            padding: 16px 20px 30px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+        }
+
+        .status-viewer .footer .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .status-viewer .footer .user-info .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #8B5CF6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .status-viewer .footer .user-info .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .status-viewer .footer .user-info .name {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .status-viewer .footer .user-info .time {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+        }
+
+        .status-viewer .footer .actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .status-viewer .footer .actions button {
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-viewer .footer .actions .reply-btn {
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            margin-left: auto;
+        }
+
+        .status-viewer .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .status-viewer .caption {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            right: 20px;
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 12px;
+            color: #fff;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        @media (max-width: 640px) {
+            .app { max-width: 100%; }
+            .header { padding: 12px 16px; }
+            .my-status { padding: 8px 16px; }
+            .status-list { padding: 8px 16px 70px; }
+            .fab { bottom: 20px; right: 20px; width: 50px; height: 50px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="app" id="app">
+
+        <!-- ─── HEADER ────────────────────────────────────────────── -->
+        <div class="header">
+            <div class="title">AURA</div>
+            <div class="header-actions">
+                <button onclick="window.location.href='/global_search.html'">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button onclick="openStatusMenu()">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ─── MY STATUS ──────────────────────────────────────────── -->
+        <div class="my-status" id="myStatus" onclick="onMyStatusTap()">
+            <div class="avatar" id="myAvatar">
+                <span class="placeholder"><i class="fas fa-user"></i></span>
+                <div class="add-btn" onclick="event.stopPropagation();showAddStatusOptions()">
+                    <i class="fas fa-plus"></i>
+                </div>
+            </div>
+            <div class="info">
+                <div class="name">My Status</div>
+                <div class="sub" id="myStatusSub">Tap + to add status</div>
+            </div>
+        </div>
+
+        <!-- ─── SECTION TITLE ──────────────────────────────────────── -->
+        <div class="section-title" id="sectionTitle">Recent Updates</div>
+
+        <!-- ─── STATUS LIST ────────────────────────────────────────── -->
+        <div class="status-list" id="statusList">
+            <div class="loader">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ─── FAB ────────────────────────────────────────────────────── -->
+    <button class="fab" onclick="showAddStatusOptions()">
+        <i class="fas fa-camera"></i>
+    </button>
+
+    <!-- ─── ADD STATUS MODAL ──────────────────────────────────────── -->
+    <div class="modal-overlay" id="addStatusModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div style="text-align:center;font-size:18px;font-weight:600;color:#fff;margin-bottom:16px;">Add Status</div>
+            <div class="modal-item" onclick="closeModal('addStatusModal');pickImage()">
+                <div class="icon purple"><i class="fas fa-photo"></i></div>
+                <div class="label">Gallery</div>
+            </div>
+            <div class="modal-item" onclick="closeModal('addStatusModal');pickCamera()">
+                <div class="icon purple"><i class="fas fa-camera"></i></div>
+                <div class="label">Camera</div>
+            </div>
+            <div class="modal-item" onclick="closeModal('addStatusModal');pickVideo()">
+                <div class="icon purple"><i class="fas fa-video"></i></div>
+                <div class="label">Video</div>
+            </div>
+            <div class="modal-item" onclick="closeModal('addStatusModal');addTextStatus()">
+                <div class="icon purple"><i class="fas fa-font"></i></div>
+                <div class="label">Text Status</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── MENU MODAL ─────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="menuModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-item" onclick="closeModal('menuModal');window.location.href='/settings.html'">
+                <div class="icon purple"><i class="fas fa-cog"></i></div>
+                <div class="label">Settings</div>
+            </div>
+            <div class="modal-item" onclick="closeModal('menuModal');window.location.href='/privacy_settings.html'">
+                <div class="icon purple"><i class="fas fa-shield-alt"></i></div>
+                <div class="label">Privacy</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── STATUS VIEWER ──────────────────────────────────────────── -->
+    <div class="status-viewer" id="statusViewer">
+        <button class="close-btn" onclick="closeStatusViewer()"><i class="fas fa-times"></i></button>
+        <div class="progress">
+            <div class="fill" id="statusProgress"></div>
+        </div>
+        <div class="content" id="statusContent">
+            <div style="color:rgba(255,255,255,0.3);font-size:20px;">Loading...</div>
+        </div>
+        <div class="caption" id="statusCaption"></div>
+        <div class="footer">
+            <div class="user-info">
+                <div class="avatar" id="viewerAvatar"><i class="fas fa-user" style="color:#fff;"></i></div>
+                <div>
+                    <div class="name" id="viewerName">Unknown</div>
+                    <div class="time" id="viewerTime">Just now</div>
+                </div>
+            </div>
+            <div class="actions">
+                <button onclick="toggleLike()" id="likeBtn">
+                    <i class="fas fa-heart" id="likeIcon"></i> <span id="likeCount">0</span>
+                </button>
+                <button onclick="showViewsList()">
+                    <i class="fas fa-eye"></i> <span id="viewCount">0</span>
+                </button>
+                <button class="reply-btn" id="replyBtn" onclick="replyToStatus()">
+                    <i class="fas fa-reply"></i> Reply
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
+            authDomain: "aurachat-85f54.firebaseapp.com",
+            projectId: "aurachat-85f54",
+            storageBucket: "aurachat-85f54.firebasestorage.app",
+            messagingSenderId: "539789121540",
+            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+
+        // ─── CLOUDINARY CONFIG ──────────────────────────────────────
+        const CLOUDINARY_CLOUD_NAME = 'dn2mwp1lc';
+        const CLOUDINARY_UPLOAD_PRESET = 'aura_chat';
+
+        // ─── STATE ─────────────────────────────────────────────────────
+        let userId = '';
+        let statuses = [];
+        let currentStatus = null;
+        let progressTimer = null;
+        let isLiked = false;
+        let myStatuses = [];
+
+        // ─── LOCAL STORAGE HELPERS ────────────────────────────────────
+        function getLocal(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+
+        // ─── DOM REFS ──────────────────────────────────────────────────
+        const statusList = document.getElementById('statusList');
+        const statusViewer = document.getElementById('statusViewer');
+        const statusContent = document.getElementById('statusContent');
+        const statusCaption = document.getElementById('statusCaption');
+        const statusProgress = document.getElementById('statusProgress');
+        const viewerName = document.getElementById('viewerName');
+        const viewerTime = document.getElementById('viewerTime');
+        const viewerAvatar = document.getElementById('viewerAvatar');
+        const likeCount = document.getElementById('likeCount');
+        const viewCount = document.getElementById('viewCount');
+        const likeIcon = document.getElementById('likeIcon');
+        const replyBtn = document.getElementById('replyBtn');
+        const myStatusSub = document.getElementById('myStatusSub');
+
+        // ─── AUTH ──────────────────────────────────────────────────────
+        function getUserId() {
+            const user = auth.currentUser;
+            if (user) return user.uid;
+            return getLocal('mock_user_id') || null;
+        }
+
+        auth.onAuthStateChanged(function(user) {
+            const id = getUserId();
+            if (id) {
+                userId = id;
+                console.log('✅ User found:', userId);
+                loadStatuses();
+            } else {
+                statusList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-slash"></i>
+                        <h3>Not signed in</h3>
+                        <p>Please sign in to see status updates</p>
+                        <button onclick="window.location.href='/onboarding.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Get Started</button>
+                    </div>
+                `;
+            }
+        });
+
+        // ─── LOAD STATUSES ────────────────────────────────────────────
+        async function loadStatuses() {
+            if (!userId) return;
+
+            statusList.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+
+            try {
+                // Load my statuses
+                const mySnapshot = await db.collection('statuses')
+                    .where('user_id', '==', userId)
+                    .where('expires_at', '>', new Date())
+                    .orderBy('created_at', 'desc')
+                    .get();
+
+                myStatuses = mySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                updateMyStatus();
+
+                // Load contact statuses
+                const contactsSnapshot = await db.collection('users').doc(userId).collection('contacts').get();
+                const contactIds = contactsSnapshot.docs.map(doc => doc.id);
+
+                if (contactIds.length === 0) {
+                    statusList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-users"></i>
+                            <h3>No contacts yet</h3>
+                            <p>Add contacts to see their status updates</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const statusSnapshot = await db.collection('statuses')
+                    .where('user_id', 'in', contactIds)
+                    .where('expires_at', '>', new Date())
+                    .orderBy('created_at', 'desc')
+                    .get();
+
+                statuses = [];
+                for (const doc of statusSnapshot.docs) {
+                    const data = doc.data();
+                    const userDoc = await db.collection('users').doc(data.user_id).get();
+                    const userData = userDoc.data() || {};
+                    statuses.push({
+                        id: doc.id,
+                        ...data,
+                        users: {
+                            username: userData.username || userData.display_name || 'Unknown',
+                            avatar_url: userData.avatar_url || null,
+                        }
+                    });
+                }
+
+                renderStatuses();
+
+            } catch (e) {
+                console.error('Load statuses error:', e);
+                statusList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <h3>Error loading statuses</h3>
+                        <p>${e.message}</p>
+                        <button onclick="loadStatuses()" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Try Again</button>
+                    </div>
+                `;
+            }
+        }
+
+        // ─── UPDATE MY STATUS ────────────────────────────────────────
+        function updateMyStatus() {
+            const hasStatus = myStatuses.length > 0;
+            const latest = hasStatus ? myStatuses[0] : null;
+
+            if (hasStatus && latest) {
+                const timeAgo = getTimeAgo(latest.created_at.toDate());
+                const viewCount = latest.view_count || 0;
+                myStatusSub.textContent = `${timeAgo} • 👁 ${viewCount}`;
+                
+                if (latest.media_url) {
+                    document.querySelector('#myAvatar img')?.remove();
+                    const img = document.createElement('img');
+                    img.src = latest.media_url;
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = 'cover';
+                    document.querySelector('#myAvatar .placeholder').style.display = 'none';
+                    document.querySelector('#myAvatar').appendChild(img);
+                }
+            } else {
+                myStatusSub.textContent = 'Tap + to add status';
+                document.querySelector('#myAvatar img')?.remove();
+                document.querySelector('#myAvatar .placeholder').style.display = 'flex';
+            }
+        }
+
+        // ─── RENDER STATUSES ─────────────────────────────────────────
+        function renderStatuses() {
+            if (statuses.length === 0) {
+                statusList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-circle"></i>
+                        <h3>No status updates</h3>
+                        <p>Save contacts to see their status</p>
+                    </div>
+                `;
+                return;
+            }
+
+            statusList.innerHTML = statuses.map(status => {
+                const username = status.users?.username || 'Unknown';
+                const avatar = status.users?.avatar_url;
+                const mediaUrl = status.media_url;
+                const caption = status.caption || '';
+                const type = status.type || 'image';
+                const timeAgo = getTimeAgo(status.created_at.toDate());
+                const viewCount = status.view_count || 0;
+                const likes = status.likes || [];
+
+                let previewHTML = '';
+                if (type === 'text') {
+                    previewHTML = `<div class="text-preview">${caption.length > 20 ? caption.substring(0,20)+'...' : caption}</div>`;
+                } else if (mediaUrl) {
+                    previewHTML = `<img src="${mediaUrl}" />`;
+                } else {
+                    previewHTML = `<i class="fas fa-image" style="color:rgba(255,255,255,0.3);"></i>`;
+                }
+
+                return `
+                    <div class="status-item" onclick="viewStatus('${status.id}')">
+                        <div class="avatar">
+                            ${avatar ? `<img src="${avatar}" />` : `<span class="placeholder">${username.charAt(0).toUpperCase()}</span>`}
+                        </div>
+                        <div class="info">
+                            <div class="name">${username}</div>
+                            <div class="sub">
+                                ${timeAgo}
+                                <i class="fas fa-eye"></i> ${viewCount}
+                                <i class="fas fa-heart"></i> ${likes.length}
+                            </div>
+                        </div>
+                        <div class="preview">${previewHTML}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ─── VIEW STATUS ─────────────────────────────────────────────
+        async function viewStatus(statusId) {
+            const status = statuses.find(s => s.id === statusId);
+            if (!status) return;
+
+            currentStatus = status;
+
+            // Mark as viewed
+            if (status.user_id !== userId) {
+                await db.collection('statuses').doc(statusId).update({
+                    view_count: firebase.firestore.FieldValue.increment(1)
+                });
+                await db.collection('statuses').doc(statusId).collection('views').doc(userId).set({
+                    user_id: userId,
+                    viewed_at: new Date()
+                });
+            }
+
+            // Update view count
+            viewCount.textContent = (status.view_count || 0) + 1;
+
+            // Show viewer
+            statusViewer.classList.add('show');
+
+            // Set user info
+            viewerName.textContent = status.users?.username || 'Unknown';
+            viewerTime.textContent = getTimeAgo(status.created_at.toDate());
+            if (status.users?.avatar_url) {
+                viewerAvatar.innerHTML = `<img src="${status.users.avatar_url}" />`;
+            } else {
+                viewerAvatar.innerHTML = `<i class="fas fa-user" style="color:#fff;"></i>`;
+            }
+
+            // Set content
+            const type = status.type || 'image';
+            const mediaUrl = status.media_url;
+            const caption = status.caption || '';
+
+            if (type === 'text') {
+                statusContent.innerHTML = `<div class="text-status">${caption}</div>`;
+            } else if (mediaUrl) {
+                statusContent.innerHTML = `<img src="${mediaUrl}" />`;
+            } else {
+                statusContent.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:20px;">No media</div>`;
+            }
+
+            // Set caption
+            if (caption && type !== 'text') {
+                statusCaption.textContent = caption;
+                statusCaption.style.display = 'block';
+            } else {
+                statusCaption.style.display = 'none';
+            }
+
+            // Set like state
+            const likes = status.likes || [];
+            isLiked = likes.includes(userId);
+            likeIcon.style.color = isLiked ? '#ef4444' : '#fff';
+            likeCount.textContent = likes.length;
+
+            // Show reply button if not mine
+            replyBtn.style.display = status.user_id === userId ? 'none' : 'flex';
+
+            // Start progress
+            const duration = type === 'video' ? 30 : type === 'text' ? 5 : 5;
+            startProgress(duration);
+
+            // Update view count in list
+            loadStatuses();
+        }
+
+        // ─── START PROGRESS ──────────────────────────────────────────
+        function startProgress(duration) {
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                statusProgress.style.width = '0%';
+            }
+
+            let progress = 0;
+            const interval = 50;
+            const increment = (interval / (duration * 1000)) * 100;
+
+            progressTimer = setInterval(() => {
+                progress += increment;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(progressTimer);
+                    setTimeout(() => {
+                        closeStatusViewer();
+                    }, 200);
+                }
+                statusProgress.style.width = progress + '%';
+            }, interval);
+        }
+
+        // ─── CLOSE STATUS VIEWER ────────────────────────────────────
+        function closeStatusViewer() {
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+            statusViewer.classList.remove('show');
+            statusProgress.style.width = '0%';
+            loadStatuses();
+        }
+
+        // ─── TOGGLE LIKE ─────────────────────────────────────────────
+        async function toggleLike() {
+            if (!currentStatus || !userId) return;
+
+            const statusId = currentStatus.id;
+            const likes = currentStatus.likes || [];
+            const index = likes.indexOf(userId);
+
+            if (index >= 0) {
+                likes.splice(index, 1);
+            } else {
+                likes.push(userId);
+            }
+
+            await db.collection('statuses').doc(statusId).update({ likes: likes });
+            currentStatus.likes = likes;
+            isLiked = !isLiked;
+            likeIcon.style.color = isLiked ? '#ef4444' : '#fff';
+            likeCount.textContent = likes.length;
+        }
+
+        // ─── SHOW VIEWS LIST ─────────────────────────────────────────
+        async function showViewsList() {
+            if (!currentStatus) return;
+
+            const viewsSnapshot = await db.collection('statuses')
+                .doc(currentStatus.id)
+                .collection('views')
+                .orderBy('viewed_at', 'desc')
+                .get();
+
+            const views = [];
+            for (const doc of viewsSnapshot.docs) {
+                const data = doc.data();
+                const userDoc = await db.collection('users').doc(data.user_id).get();
+                const userData = userDoc.data() || {};
+                views.push({
+                    username: userData.username || userData.display_name || 'Unknown',
+                    avatar_url: userData.avatar_url || null,
+                    viewed_at: data.viewed_at
+                });
+            }
+
+            if (views.length === 0) {
+                alert('No views yet');
+                return;
+            }
+
+            let msg = '👁 Views:\n\n';
+            views.forEach(v => {
+                const time = getTimeAgo(v.viewed_at.toDate());
+                msg += `👤 ${v.username} - ${time}\n`;
+            });
+            alert(msg);
+        }
+
+        // ─── REPLY TO STATUS ─────────────────────────────────────────
+        function replyToStatus() {
+            if (!currentStatus) return;
+
+            const reply = prompt('Reply to ' + (currentStatus.users?.username || 'Unknown') + ':');
+            if (reply && reply.trim()) {
+                alert('Reply sent! (Feature coming soon)');
+            }
+        }
+
+        // ─── ADD STATUS FUNCTIONS ────────────────────────────────────
+        function showAddStatusOptions() {
+            document.getElementById('addStatusModal').classList.add('show');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        function openStatusMenu() {
+            document.getElementById('menuModal').classList.add('show');
+        }
+
+        function pickImage() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) uploadStatus(file, 'image');
+            };
+            input.click();
+        }
+
+        function pickCamera() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.capture = 'environment';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) uploadStatus(file, 'image');
+            };
+            input.click();
+        }
+
+        function pickVideo() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'video/*';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) uploadStatus(file, 'video');
+            };
+            input.click();
+        }
+
+        function addTextStatus() {
+            const text = prompt('What\'s on your mind? (max 140 chars)');
+            if (text && text.trim()) {
+                uploadTextStatus(text.trim());
+            }
+        }
+
+        // ─── UPLOAD STATUS ───────────────────────────────────────────
+        async function uploadStatus(file, type) {
+            if (!userId) {
+                alert('Please sign in first');
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+                formData.append('folder', `aurachat/statuses/${userId}`);
+
+                const response = await fetch(
+                    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${type === 'image' ? 'image' : 'video'}/upload`,
+                    { method: 'POST', body: formData }
+                );
+                const data = await response.json();
+
+                if (data.secure_url) {
+                    const expiresAt = new Date();
+                    expiresAt.setHours(expiresAt.getHours() + 24);
+
+                    await db.collection('statuses').add({
+                        user_id: userId,
+                        media_url: data.secure_url,
+                        type: type,
+                        created_at: new Date(),
+                        expires_at: expiresAt,
+                        view_count: 0,
+                        likes: [],
+                        replies: []
+                    });
+
+                    alert('Status uploaded!');
+                    loadStatuses();
+                }
+            } catch (e) {
+                console.error('Upload error:', e);
+                alert('Upload failed: ' + e.message);
+            }
+        }
+
+        // ─── UPLOAD TEXT STATUS ─────────────────────────────────────
+        async function uploadTextStatus(text) {
+            if (!userId) return;
+
+            try {
+                const expiresAt = new Date();
+                expiresAt.setHours(expiresAt.getHours() + 24);
+
+                await db.collection('statuses').add({
+                    user_id: userId,
+                    caption: text,
+                    type: 'text',
+                    created_at: new Date(),
+                    expires_at: expiresAt,
+                    view_count: 0,
+                    likes: [],
+                    replies: []
+                });
+
+                alert('Status posted!');
+                loadStatuses();
+            } catch (e) {
+                console.error('Text status error:', e);
+                alert('Failed to post status: ' + e.message);
+            }
+        }
+
+        // ─── MY STATUS TAP ───────────────────────────────────────────
+        function onMyStatusTap() {
+            if (myStatuses.length > 0) {
+                viewStatus(myStatuses[0].id);
+            } else {
+                showAddStatusOptions();
+            }
+        }
+
+        // ─── HELPERS ──────────────────────────────────────────────────
+        function getTimeAgo(date) {
+            if (!date) return 'Just now';
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return minutes + 'm ago';
+            if (hours < 24) return hours + 'h ago';
+            return days + 'd ago';
+        }
+
+        // ─── CLOSE MODAL ON OVERLAY CLICK ────────────────────────────
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('show');
+                }
+            });
+        });
+
+        console.log('📸 AURA Chat — Status Screen');
+    </script>
+
+</body>
+</html>
