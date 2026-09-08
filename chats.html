@@ -146,20 +146,6 @@
             scroll-behavior: smooth;
         }
 
-        .tab-panel {
-            display: none;
-            animation: fadeIn 0.25s ease;
-        }
-
-        .tab-panel.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
         /* ===== LOADING ===== */
         .loading-container {
             display: flex;
@@ -468,6 +454,11 @@
             animation: fadeIn 0.3s ease;
         }
 
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
         .dialog-title {
             color: #fff;
             font-size: 18px;
@@ -526,28 +517,27 @@
             color: #fff;
         }
 
-        /* ===== CHANNEL CODE BOX ===== */
-        .code-box {
-            padding: 16px;
-            background: rgba(255,255,255,0.05);
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a103c;
+            color: #fff;
+            padding: 12px 24px;
             border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 14px;
+            z-index: 2000;
+            display: none;
+            max-width: 90%;
             text-align: center;
-            margin: 12px 0;
+            animation: slideUp 0.3s ease;
         }
 
-        .code-box-label {
-            color: rgba(255,255,255,0.6);
-            font-size: 13px;
-        }
-
-        .code-box-code {
-            color: #8B5CF6;
-            font-size: 20px;
-            font-weight: bold;
-            letter-spacing: 2px;
-            margin-top: 8px;
-            word-break: break-all;
+        .toast.show {
+            display: block;
         }
 
         /* ===== RESPONSIVE ===== */
@@ -567,7 +557,7 @@
             <div class="app-bar-top">
                 <div class="app-title">AURA</div>
                 <div class="app-bar-actions">
-                    <a href="global_search.html" class="app-bar-actions" style="text-decoration:none;">
+                    <a href="global_search.html" style="text-decoration:none;">
                         <button><i class="fas fa-search"></i></button>
                     </a>
                     <button onclick="showMenu()"><i class="fas fa-ellipsis-v"></i></button>
@@ -576,56 +566,31 @@
 
             <!-- Tabs -->
             <div class="tab-bar">
-                <a href="chats.html" class="tab-item active" data-tab="0">
-                    Chats
-                </a>
-                <a href="status.html" class="tab-item" data-tab="1">
-                    Status
-                </a>
-                <a href="calls.html" class="tab-item" data-tab="2">
-                    Calls
-                </a>
+                <a href="chats.html" class="tab-item active">Chats</a>
+                <a href="status.html" class="tab-item">Status</a>
+                <a href="calls.html" class="tab-item">Calls</a>
             </div>
         </div>
 
         <!-- Tab Content -->
         <div class="tab-content" id="tabContent">
-            <!-- Chats Tab -->
-            <div class="tab-panel active" id="panel0">
-                <div id="chatsContainer">
-                    <div class="loading-container">
-                        <div class="spinner"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Status Tab -->
-            <div class="tab-panel" id="panel1">
-                <div id="statusContainer">
-                    <div class="loading-container">
-                        <div class="spinner"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Calls Tab -->
-            <div class="tab-panel" id="panel2">
-                <div class="calls-container">
-                    <div class="calls-icon">
-                        <i class="fas fa-phone"></i>
-                    </div>
-                    <div class="calls-text">Tap + to start a call</div>
+            <div id="chatsContainer">
+                <div class="loading-container">
+                    <div class="spinner"></div>
                 </div>
             </div>
         </div>
 
         <!-- FAB -->
         <div class="fab-container">
-            <a href="#" class="fab" id="fabBtn" onclick="handleFabClick(event)">
+            <button class="fab" id="fabBtn" onclick="handleFabClick()">
                 <i class="fas fa-comment"></i>
-            </a>
+            </button>
         </div>
     </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
 
     <!-- ===== MODALS ===== -->
 
@@ -650,68 +615,6 @@
                     <i class="fas fa-bullhorn"></i>
                 </div>
                 <div class="modal-item-label">New Channel</div>
-            </a>
-        </div>
-    </div>
-
-    <!-- Status Options Modal -->
-    <div class="modal-overlay" id="statusModal">
-        <div class="modal-content">
-            <div class="modal-handle"></div>
-            <a href="#" class="modal-item" onclick="closeModal('statusModal'); alert('Camera feature coming soon!')">
-                <div class="modal-item-icon" style="background: rgba(139,92,246,0.2); color: #8B5CF6;">
-                    <i class="fas fa-camera"></i>
-                </div>
-                <div class="modal-item-label">Camera</div>
-            </a>
-            <a href="#" class="modal-item" onclick="closeModal('statusModal'); alert('Gallery feature coming soon!')">
-                <div class="modal-item-icon" style="background: rgba(6,182,212,0.2); color: #06B6D4;">
-                    <i class="fas fa-images"></i>
-                </div>
-                <div class="modal-item-label">Gallery</div>
-            </a>
-            <a href="#" class="modal-item" onclick="closeModal('statusModal'); alert('Text Status feature coming soon!')">
-                <div class="modal-item-icon" style="background: rgba(251,191,36,0.2); color: #FBBF24;">
-                    <i class="fas fa-font"></i>
-                </div>
-                <div class="modal-item-label">Text Status</div>
-            </a>
-        </div>
-    </div>
-
-    <!-- Call Options Modal -->
-    <div class="modal-overlay" id="callModal">
-        <div class="modal-content">
-            <div class="modal-handle"></div>
-            
-            <div class="code-box">
-                <div class="code-box-label">Share this code to join</div>
-                <div class="code-box-code" id="channelCode">Loading...</div>
-            </div>
-
-            <a href="call_pick.html" class="modal-item" onclick="closeModal('callModal')">
-                <div class="modal-item-icon" style="background: rgba(139,92,246,0.2); color: #8B5CF6;">
-                    <i class="fas fa-user-search"></i>
-                </div>
-                <div class="modal-item-label">Call from Contacts</div>
-            </a>
-            <a href="call_active.html" class="modal-item" onclick="closeModal('callModal')">
-                <div class="modal-item-icon" style="background: rgba(6,182,212,0.2); color: #06B6D4;">
-                    <i class="fas fa-phone"></i>
-                </div>
-                <div class="modal-item-label">Start Voice Call</div>
-            </a>
-            <a href="call_active.html" class="modal-item" onclick="closeModal('callModal')">
-                <div class="modal-item-icon" style="background: rgba(251,191,36,0.2); color: #FBBF24;">
-                    <i class="fas fa-video"></i>
-                </div>
-                <div class="modal-item-label">Start Video Call</div>
-            </a>
-            <a href="#" class="modal-item" onclick="closeModal('callModal'); showJoinDialog()">
-                <div class="modal-item-icon" style="background: rgba(236,72,153,0.2); color: #EC4899;">
-                    <i class="fas fa-dial"></i>
-                </div>
-                <div class="modal-item-label">Join by Code</div>
             </a>
         </div>
     </div>
@@ -741,18 +644,6 @@
         </div>
     </div>
 
-    <!-- Join Call Dialog -->
-    <div class="dialog-overlay" id="joinDialog">
-        <div class="dialog-content">
-            <div class="dialog-title">Join Call</div>
-            <input type="text" class="dialog-input" id="joinCodeInput" placeholder="Enter channel name..." />
-            <div class="dialog-actions">
-                <button class="dialog-btn dialog-btn-cancel" onclick="closeDialog('joinDialog')">Cancel</button>
-                <button class="dialog-btn dialog-btn-confirm" onclick="joinCall()">Join</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         // ============================================================
         // FIREBASE CONFIG (Replace with your own)
@@ -771,360 +662,917 @@
         const auth = firebase.auth();
 
         // ============================================================
-        // STATE
+        // CHAT PROVIDER - Full Dart to JS Conversion
         // ============================================================
-        let currentTab = 0;
-        let chats = [];
-        let isLoading = true;
-        let currentUser = null;
-        let mockUserId = null;
+        class ChatProvider {
+            constructor() {
+                this._auth = auth;
+                this._firestore = db;
+                
+                this._chats = [];
+                this._contacts = [];
+                this._blockedUsers = [];
+                this._isLoading = false;
+                this._error = null;
+                this._chatsSubscription = null;
+                this._currentUserId = null;
+                this._listeners = [];
 
-        // ============================================================
-        // DOM REFS
-        // ============================================================
-        const chatsContainer = document.getElementById('chatsContainer');
-        const statusContainer = document.getElementById('statusContainer');
-        const fabBtn = document.getElementById('fabBtn');
-        const fabIcon = fabBtn.querySelector('i');
-
-        // ============================================================
-        // INIT
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', () => {
-            // Check which page we're on based on URL
-            const path = window.location.pathname;
-            if (path.includes('status.html')) {
-                switchTab(1);
-            } else if (path.includes('calls.html')) {
-                switchTab(2);
-            } else {
-                switchTab(0);
-            }
-            
-            initAuth();
-            setupTabHighlighting();
-        });
-
-        function setupTabHighlighting() {
-            const path = window.location.pathname;
-            document.querySelectorAll('.tab-item').forEach(tab => {
-                tab.classList.remove('active');
-                if (path.includes('status.html') && tab.textContent.trim() === 'Status') {
-                    tab.classList.add('active');
-                } else if (path.includes('calls.html') && tab.textContent.trim() === 'Calls') {
-                    tab.classList.add('active');
-                } else if ((path.includes('chats.html') || path === '/' || path === '/index.html') && tab.textContent.trim() === 'Chats') {
-                    tab.classList.add('active');
-                }
-            });
-        }
-
-        function initAuth() {
-            auth.onAuthStateChanged(user => {
-                if (user) {
-                    currentUser = user;
-                    loadChats();
-                    loadStatuses();
-                } else {
-                    // For demo, use mock user
-                    mockUserId = 'mock_user_123';
-                    loadChats();
-                    loadStatuses();
-                }
-            });
-        }
-
-        // ============================================================
-        // TAB SWITCHING
-        // ============================================================
-        function switchTab(index) {
-            currentTab = index;
-            
-            // Update panels
-            document.querySelectorAll('.tab-panel').forEach((panel, i) => {
-                panel.classList.toggle('active', i === index);
-            });
-
-            // Update FAB
-            updateFab(index);
-        }
-
-        function updateFab(index) {
-            const icons = ['fa-comment', 'fa-camera', 'fa-phone-plus'];
-            const labels = ['New Chat', 'Add Status', 'New Call'];
-            fabIcon.className = `fas ${icons[index]}`;
-            fabBtn.title = labels[index];
-        }
-
-        // ============================================================
-        // LOAD CHATS (Firebase)
-        // ============================================================
-        function loadChats() {
-            isLoading = true;
-            showLoading(chatsContainer);
-
-            const userId = currentUser ? currentUser.uid : mockUserId;
-            if (!userId) {
-                showEmptyChats();
-                return;
+                this._init();
             }
 
-            db.collection('users')
-                .doc(userId)
-                .collection('chats')
-                .orderBy('last_message_at', 'desc')
-                .onSnapshot((snapshot) => {
-                    isLoading = false;
-                    chats = [];
-                    snapshot.forEach(doc => {
-                        const data = doc.data();
-                        data.id = doc.id;
-                        chats.push(data);
-                    });
-                    renderChats();
-                }, (error) => {
-                    isLoading = false;
-                    console.error('Error loading chats:', error);
-                    showEmptyChats();
+            // ===== GETTERS =====
+            get chats() { return this._chats; }
+            get contacts() { return this._contacts; }
+            get blockedUsers() { return this._blockedUsers; }
+            get isLoading() { return this._isLoading; }
+            get error() { return this._error; }
+            get currentUserId() { return this._currentUserId; }
+
+            // ===== LISTENER SYSTEM =====
+            addListener(callback) {
+                this._listeners.push(callback);
+            }
+
+            removeListener(callback) {
+                this._listeners = this._listeners.filter(cb => cb !== callback);
+            }
+
+            _notifyListeners() {
+                this._listeners.forEach(callback => {
+                    try { callback(); } catch (e) { console.error('Listener error:', e); }
                 });
+            }
+
+            // ===== INIT =====
+            async _init() {
+                this._currentUserId = this._auth.currentUser?.uid;
+                if (this._currentUserId) {
+                    await this._loadBlockedUsers();
+                    await this.loadChats();
+                    this._subscribeToChats();
+                }
+            }
+
+            async setMockUser(mockUserId) {
+                this._currentUserId = mockUserId;
+                await this._loadBlockedUsers();
+                await this.loadChats();
+                this._subscribeToChats();
+                this._notifyListeners();
+            }
+
+            // ===== BLOCKED USERS =====
+            async _loadBlockedUsers() {
+                try {
+                    const doc = await this._firestore
+                        .collection('users')
+                        .doc(this._currentUserId)
+                        .get();
+                    
+                    if (doc.exists) {
+                        const data = doc.data();
+                        this._blockedUsers = data.blocked_users || [];
+                    }
+                } catch (e) {
+                    console.error('Load blocked users error:', e);
+                }
+            }
+
+            isBlocked(userId) {
+                return this._blockedUsers.includes(userId);
+            }
+
+            async blockUser(userId) {
+                if (!this._currentUserId) return;
+                try {
+                    await this._firestore
+                        .collection('users')
+                        .doc(this._currentUserId)
+                        .set({
+                            blocked_users: firebase.firestore.FieldValue.arrayUnion([userId])
+                        }, { merge: true });
+                    
+                    this._blockedUsers.push(userId);
+                    this._notifyListeners();
+                    showToast('User blocked');
+                } catch (e) {
+                    this._error = `Failed to block user: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to block user');
+                }
+            }
+
+            async unblockUser(userId) {
+                if (!this._currentUserId) return;
+                try {
+                    await this._firestore
+                        .collection('users')
+                        .doc(this._currentUserId)
+                        .set({
+                            blocked_users: firebase.firestore.FieldValue.arrayRemove([userId])
+                        }, { merge: true });
+                    
+                    this._blockedUsers = this._blockedUsers.filter(id => id !== userId);
+                    this._notifyListeners();
+                    showToast('User unblocked');
+                } catch (e) {
+                    this._error = `Failed to unblock user: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to unblock user');
+                }
+            }
+
+            // ===== LOAD CHATS =====
+            async loadChats() {
+                this._setLoading(true);
+                this._error = null;
+
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) {
+                        this._setLoading(false);
+                        return;
+                    }
+
+                    const snapshot = await this._firestore
+                        .collection('chats')
+                        .where('participants', 'array-contains', userId)
+                        .orderBy('last_message_at', 'desc')
+                        .get();
+
+                    const formattedChats = [];
+
+                    for (const doc of snapshot.docs) {
+                        const chat = doc.data();
+                        const chatId = doc.id;
+                        const chatType = chat.type || 'direct';
+
+                        // Skip deleted chats
+                        const deletedFor = chat.deleted_for || [];
+                        if (deletedFor.includes(userId)) continue;
+
+                        // Get participants list
+                        const participants = chat.participants || [];
+
+                        // Skip blocked DMs
+                        if (chatType === 'direct') {
+                            const otherUserId = participants.find(id => id !== userId) || '';
+                            if (otherUserId && this._blockedUsers.includes(otherUserId)) {
+                                continue;
+                            }
+                        }
+
+                        // Skip archived
+                        const participantsData = chat.participants_data || {};
+                        const myData = participantsData[userId] || {};
+                        if (myData.is_archived === true) continue;
+
+                        // Get unread count
+                        const unreadCount = await this._getUnreadCount(chatId, userId);
+
+                        // Get member count
+                        let participantsCount = 0;
+                        if (chatType === 'group' || chatType === 'channel') {
+                            participantsCount = participants.length;
+                        }
+
+                        // Get role
+                        const role = myData.role || 'member';
+
+                        // Fix last_message_at
+                        let lastMessageAt = null;
+                        const rawLastMessageAt = chat.last_message_at;
+                        if (rawLastMessageAt?.toDate) {
+                            lastMessageAt = rawLastMessageAt.toDate();
+                        } else if (rawLastMessageAt instanceof Date) {
+                            lastMessageAt = rawLastMessageAt;
+                        } else if (typeof rawLastMessageAt === 'string') {
+                            lastMessageAt = new Date(rawLastMessageAt);
+                        }
+
+                        // Fallback
+                        if (!lastMessageAt || lastMessageAt > new Date(Date.now() + 60000)) {
+                            const createdAt = chat.created_at;
+                            if (createdAt?.toDate) {
+                                lastMessageAt = createdAt.toDate();
+                            } else if (createdAt instanceof Date) {
+                                lastMessageAt = createdAt;
+                            } else if (typeof createdAt === 'string') {
+                                lastMessageAt = new Date(createdAt);
+                            } else {
+                                lastMessageAt = new Date();
+                            }
+                        }
+
+                        formattedChats.push({
+                            ...chat,
+                            id: chatId,
+                            role: role,
+                            unread_count: unreadCount,
+                            participants_count: participantsCount,
+                            last_message_at: lastMessageAt,
+                        });
+                    }
+
+                    this._chats = formattedChats;
+                    this._setLoading(false);
+                } catch (e) {
+                    this._error = `Failed to load chats: ${e.message}`;
+                    console.error('loadChats error:', e);
+                    this._setLoading(false);
+                }
+            }
+
+            async _getUnreadCount(chatId, userId) {
+                try {
+                    const snapshot = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .where('is_read', '==', false)
+                        .where('sender_id', '!=', userId)
+                        .get();
+                    
+                    return snapshot.size;
+                } catch (e) {
+                    return 0;
+                }
+            }
+
+            _subscribeToChats() {
+                const userId = this._currentUserId;
+                if (!userId) return;
+
+                if (this._chatsSubscription) {
+                    this._chatsSubscription();
+                    this._chatsSubscription = null;
+                }
+
+                this._chatsSubscription = this._firestore
+                    .collection('chats')
+                    .where('participants', 'array-contains', userId)
+                    .onSnapshot(() => {
+                        setTimeout(() => this.loadChats(), 500);
+                    }, (error) => {
+                        console.error('Chat subscription error:', error);
+                    });
+            }
+
+            // ===== LOAD CONTACTS =====
+            async loadContacts() {
+                this._setLoading(true);
+
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) {
+                        this._setLoading(false);
+                        return;
+                    }
+
+                    const snapshot = await this._firestore
+                        .collection('users')
+                        .get();
+
+                    this._contacts = snapshot.docs
+                        .map(doc => doc.data())
+                        .filter(user => user.id !== userId);
+                    
+                    this._setLoading(false);
+                } catch (e) {
+                    this._error = `Failed to load contacts: ${e.message}`;
+                    this._setLoading(false);
+                }
+            }
+
+            // ===== START DIRECT CHAT =====
+            async startDirectChat(otherUserId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return null;
+
+                    if (this._blockedUsers.includes(otherUserId)) {
+                        this._error = 'You have blocked this user';
+                        this._notifyListeners();
+                        showToast('You have blocked this user');
+                        return null;
+                    }
+
+                    // Check if direct chat already exists
+                    const existingQuery = await this._firestore
+                        .collection('chats')
+                        .where('type', '==', 'direct')
+                        .where('participants', 'array-contains', userId)
+                        .get();
+
+                    for (const doc of existingQuery.docs) {
+                        const participants = doc.data().participants || [];
+                        if (participants.includes(otherUserId)) {
+                            await this.loadChats();
+                            return this._chats.find(chat => chat.id === doc.id) || { id: doc.id, ...doc.data() };
+                        }
+                    }
+
+                    // Fetch other user's profile
+                    const otherUserDoc = await this._firestore
+                        .collection('users')
+                        .doc(otherUserId)
+                        .get();
+                    
+                    const otherUserData = otherUserDoc.data();
+                    const otherUserName = otherUserData?.username || otherUserData?.display_name || 'Unknown';
+                    const otherUserAvatar = otherUserData?.avatar_url || null;
+
+                    const chatId = this._generateUUID();
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .set({
+                            id: chatId,
+                            type: 'direct',
+                            participants: [userId, otherUserId],
+                            participants_data: {
+                                [userId]: { role: 'member', joined_at: firebase.firestore.FieldValue.serverTimestamp() },
+                                [otherUserId]: { role: 'member', joined_at: firebase.firestore.FieldValue.serverTimestamp() },
+                            },
+                            name: otherUserName,
+                            avatar_url: otherUserAvatar,
+                            created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                            last_message_at: firebase.firestore.FieldValue.serverTimestamp(),
+                            last_message: 'Chat started',
+                        });
+
+                    await this.loadChats();
+                    showToast('Chat started!');
+                    return this._chats.find(chat => chat.id === chatId) || { id: chatId };
+                } catch (e) {
+                    this._error = `Failed to start chat: ${e.message}`;
+                    showToast('Failed to start chat');
+                    return null;
+                }
+            }
+
+            // ===== MARK MESSAGES AS READ =====
+            async markMessagesAsRead(chatId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    const unreadSnapshot = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .where('is_read', '==', false)
+                        .where('sender_id', '!=', userId)
+                        .get();
+
+                    const batch = this._firestore.batch();
+                    unreadSnapshot.docs.forEach(doc => {
+                        batch.update(doc.ref, { is_read: true });
+                    });
+                    await batch.commit();
+
+                    const index = this._chats.findIndex(chat => chat.id === chatId);
+                    if (index >= 0) {
+                        this._chats[index].unread_count = 0;
+                        this._notifyListeners();
+                    }
+                } catch (e) {
+                    console.error('Mark as read error:', e);
+                }
+            }
+
+            // ===== DELETE CHAT =====
+            async deleteChat(chatId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            deleted_for: firebase.firestore.FieldValue.arrayUnion([userId])
+                        });
+
+                    this._chats = this._chats.filter(chat => chat.id !== chatId);
+                    this._notifyListeners();
+                    showToast('Chat deleted');
+                } catch (e) {
+                    this._error = `Failed to delete chat: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to delete chat');
+                }
+            }
+
+            // ===== PERMANENTLY DELETE CHAT =====
+            async permanentlyDeleteChat(chatId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) {
+                        this._error = 'Not authenticated';
+                        this._notifyListeners();
+                        return false;
+                    }
+
+                    const chatDoc = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .get();
+                    
+                    if (!chatDoc.exists) {
+                        this._error = 'Chat not found';
+                        this._notifyListeners();
+                        return false;
+                    }
+
+                    const chatData = chatDoc.data();
+                    const myRole = chatData?.participants_data?.[userId]?.role || 'member';
+
+                    if (myRole !== 'owner') {
+                        this._error = 'Only the owner can delete this group';
+                        this._notifyListeners();
+                        showToast('Only the owner can delete this group');
+                        return false;
+                    }
+
+                    const messagesSnapshot = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .get();
+
+                    const batch = this._firestore.batch();
+                    messagesSnapshot.docs.forEach(doc => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .delete();
+
+                    this._chats = this._chats.filter(chat => chat.id !== chatId);
+                    this._notifyListeners();
+                    showToast('Group permanently deleted');
+                    return true;
+                } catch (e) {
+                    this._error = `Failed to delete group: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to delete group');
+                    return false;
+                }
+            }
+
+            // ===== ARCHIVE / UNARCHIVE =====
+            async archiveChat(chatId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            [`participants_data.${userId}.is_archived`]: true
+                        });
+
+                    await this.loadChats();
+                    showToast('Chat archived');
+                } catch (e) {
+                    this._error = `Failed to archive chat: ${e.message}`;
+                    showToast('Failed to archive chat');
+                }
+            }
+
+            async unarchiveChat(chatId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            [`participants_data.${userId}.is_archived`]: false
+                        });
+
+                    await this.loadChats();
+                    showToast('Chat unarchived');
+                } catch (e) {
+                    this._error = `Failed to unarchive chat: ${e.message}`;
+                    showToast('Failed to unarchive chat');
+                }
+            }
+
+            // ===== LEAVE CHAT =====
+            async leaveChat(chatId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    const chatDoc = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .get();
+                    
+                    if (!chatDoc.exists) return;
+
+                    const chatData = chatDoc.data();
+                    const isOwner = chatData.created_by === userId;
+
+                    if (isOwner) {
+                        this._error = 'Owner cannot leave. Transfer ownership or delete the group.';
+                        this._notifyListeners();
+                        showToast('Owner cannot leave');
+                        return;
+                    }
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            participants: firebase.firestore.FieldValue.arrayRemove([userId]),
+                            [`participants_data.${userId}`]: firebase.firestore.FieldValue.delete(),
+                            member_count: firebase.firestore.FieldValue.increment(-1)
+                        });
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .add({
+                            type: 'system',
+                            content: 'A member left',
+                            created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+
+                    await this.loadChats();
+                    showToast('Left the group');
+                } catch (e) {
+                    this._error = `Failed to leave chat: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to leave group');
+                }
+            }
+
+            // ===== KICK MEMBER =====
+            async kickMember(chatId, memberId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    const chatDoc = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .get();
+                    
+                    if (!chatDoc.exists) return;
+
+                    const chatData = chatDoc.data();
+                    const myRole = chatData?.participants_data?.[userId]?.role || 'member';
+
+                    if (myRole !== 'owner' && myRole !== 'admin') {
+                        this._error = 'Only owners and admins can kick members';
+                        this._notifyListeners();
+                        showToast('Only owners and admins can kick members');
+                        return;
+                    }
+
+                    const memberRole = chatData?.participants_data?.[memberId]?.role || 'member';
+                    if (memberRole === 'owner') {
+                        this._error = 'Cannot kick the owner';
+                        this._notifyListeners();
+                        showToast('Cannot kick the owner');
+                        return;
+                    }
+                    if (myRole === 'admin' && memberRole === 'admin') {
+                        this._error = 'Admins cannot kick other admins';
+                        this._notifyListeners();
+                        showToast('Admins cannot kick other admins');
+                        return;
+                    }
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            participants: firebase.firestore.FieldValue.arrayRemove([memberId]),
+                            [`participants_data.${memberId}`]: firebase.firestore.FieldValue.delete(),
+                            member_count: firebase.firestore.FieldValue.increment(-1)
+                        });
+
+                    const userDoc = await this._firestore
+                        .collection('users')
+                        .doc(memberId)
+                        .get();
+                    const userName = userDoc.data()?.username || 'A member';
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .add({
+                            type: 'system',
+                            content: `${userName} was removed`,
+                            created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+
+                    await this.loadChats();
+                    showToast('Member kicked');
+                } catch (e) {
+                    this._error = `Failed to kick member: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to kick member');
+                }
+            }
+
+            // ===== BAN MEMBER =====
+            async banMember(chatId, memberId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    const chatDoc = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .get();
+                    
+                    if (!chatDoc.exists) return;
+
+                    const chatData = chatDoc.data();
+                    const myRole = chatData?.participants_data?.[userId]?.role || 'member';
+
+                    if (myRole !== 'owner' && myRole !== 'admin') {
+                        this._error = 'Only owners and admins can ban members';
+                        this._notifyListeners();
+                        showToast('Only owners and admins can ban members');
+                        return;
+                    }
+
+                    const memberRole = chatData?.participants_data?.[memberId]?.role || 'member';
+                    if (memberRole === 'owner') {
+                        this._error = 'Cannot ban the owner';
+                        this._notifyListeners();
+                        showToast('Cannot ban the owner');
+                        return;
+                    }
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            participants: firebase.firestore.FieldValue.arrayRemove([memberId]),
+                            [`participants_data.${memberId}`]: firebase.firestore.FieldValue.delete(),
+                            banned_users: firebase.firestore.FieldValue.arrayUnion([memberId]),
+                            member_count: firebase.firestore.FieldValue.increment(-1)
+                        });
+
+                    const userDoc = await this._firestore
+                        .collection('users')
+                        .doc(memberId)
+                        .get();
+                    const userName = userDoc.data()?.username || 'A member';
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .add({
+                            type: 'system',
+                            content: `${userName} was banned`,
+                            created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+
+                    await this.loadChats();
+                    showToast('Member banned');
+                } catch (e) {
+                    this._error = `Failed to ban member: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to ban member');
+                }
+            }
+
+            // ===== PROMOTE TO ADMIN =====
+            async promoteToAdmin(chatId, memberId) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    const chatDoc = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .get();
+                    
+                    if (!chatDoc.exists) return;
+
+                    const chatData = chatDoc.data();
+                    const myRole = chatData?.participants_data?.[userId]?.role || 'member';
+
+                    if (myRole !== 'owner') {
+                        this._error = 'Only the owner can promote members';
+                        this._notifyListeners();
+                        showToast('Only the owner can promote members');
+                        return;
+                    }
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            [`participants_data.${memberId}.role`]: 'admin'
+                        });
+
+                    const userDoc = await this._firestore
+                        .collection('users')
+                        .doc(memberId)
+                        .get();
+                    const userName = userDoc.data()?.username || 'A member';
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .add({
+                            type: 'system',
+                            content: `${userName} was promoted to admin`,
+                            created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+
+                    await this.loadChats();
+                    showToast('Member promoted to admin');
+                } catch (e) {
+                    this._error = `Failed to promote member: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to promote member');
+                }
+            }
+
+            // ===== TOGGLE SETTING =====
+            async toggleSetting(chatId, settingKey, value) {
+                try {
+                    const userId = this._currentUserId;
+                    if (!userId) return;
+
+                    const chatDoc = await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .get();
+                    
+                    if (!chatDoc.exists) return;
+
+                    const chatData = chatDoc.data();
+                    const myRole = chatData?.participants_data?.[userId]?.role || 'member';
+
+                    if (myRole !== 'owner' && myRole !== 'admin') {
+                        this._error = 'Only owners and admins can change settings';
+                        this._notifyListeners();
+                        showToast('Only owners and admins can change settings');
+                        return;
+                    }
+
+                    await this._firestore
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                            [`settings.${settingKey}`]: value
+                        });
+
+                    await this.loadChats();
+                    showToast('Setting updated');
+                } catch (e) {
+                    this._error = `Failed to update setting: ${e.message}`;
+                    this._notifyListeners();
+                    showToast('Failed to update setting');
+                }
+            }
+
+            // ===== HELPERS =====
+            _setLoading(value) {
+                this._isLoading = value;
+                this._notifyListeners();
+            }
+
+            clearError() {
+                this._error = null;
+                this._notifyListeners();
+            }
+
+            _generateUUID() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            // ===== DISPOSE =====
+            dispose() {
+                if (this._chatsSubscription) {
+                    this._chatsSubscription();
+                    this._chatsSubscription = null;
+                }
+                this._listeners = [];
+            }
         }
 
+        // ============================================================
+        // UI CONTROLLER
+        // ============================================================
+        let chatProvider = null;
+        const chatsContainer = document.getElementById('chatsContainer');
+
+        // ===== TOAST =====
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ===== RENDER CHATS =====
         function renderChats() {
-            if (isLoading) {
-                showLoading(chatsContainer);
-                return;
-            }
+            if (!chatProvider) return;
 
-            if (chats.length === 0) {
-                showEmptyChats();
-                return;
-            }
-
-            let html = '<ul class="chat-list">';
-            chats.forEach(chat => {
-                html += buildChatItem(chat);
-            });
-            html += '</ul>';
-            chatsContainer.innerHTML = html;
-        }
-
-        function buildChatItem(chat) {
-            const name = chat.name || 'Unknown';
-            const avatar = chat.avatar_url || null;
-            const lastMessage = chat.last_message || '';
-            const time = chat.last_message_at || null;
-            const unread = chat.unread_count || 0;
-            const chatType = chat.type || 'direct';
-            const isGroup = chatType === 'group';
-            const isChannel = chatType === 'channel';
-
-            let avatarHtml = '';
-            if (avatar) {
-                avatarHtml = `<img src="${avatar}" alt="${name}" />`;
-            } else {
-                let icon = 'fa-user';
-                if (isChannel) icon = 'fa-bullhorn';
-                else if (isGroup) icon = 'fa-users';
-                avatarHtml = `<i class="fas ${icon} avatar-icon"></i>`;
-            }
-
-            const timeStr = time ? formatTime(time) : '';
-
-            let unreadHtml = '';
-            if (unread > 0) {
-                unreadHtml = `<span class="chat-unread">${unread}</span>`;
-            }
-
-            const chatId = chat.id;
-            const href = isChannel 
-                ? `channel.html?id=${chatId}&name=${encodeURIComponent(name)}`
-                : `chat.html?id=${chatId}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar || '')}&group=${isGroup}`;
-
-            return `
-                <a href="${href}" class="chat-item">
-                    <div class="chat-avatar">${avatarHtml}</div>
-                    <div class="chat-info">
-                        <div class="chat-header">
-                            <span class="chat-name">${escapeHtml(name)}</span>
-                            <span class="chat-time">${timeStr}</span>
-                        </div>
-                        <div class="chat-subtitle">
-                            <span class="chat-last-message">${escapeHtml(lastMessage)}</span>
-                            ${unreadHtml}
-                        </div>
-                    </div>
-                </a>
-            `;
-        }
-
-        function showLoading(container) {
-            container.innerHTML = `
-                <div class="loading-container">
-                    <div class="spinner"></div>
-                </div>
-            `;
-        }
-
-        function showEmptyChats() {
-            chatsContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon"><i class="fas fa-comment-dots"></i></div>
-                    <div class="empty-title">No chats yet</div>
-                    <div class="empty-subtitle">Start a conversation</div>
-                </div>
-            `;
-        }
-
-        // ============================================================
-        // LOAD STATUSES (Firebase) - for status.html page
-        // ============================================================
-        function loadStatuses() {
-            const userId = currentUser ? currentUser.uid : mockUserId;
-            if (!userId) {
-                statusContainer.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-icon"><i class="fas fa-camera"></i></div>
-                        <div class="empty-title">No status updates</div>
+            if (chatProvider.isLoading) {
+                chatsContainer.innerHTML = `
+                    <div class="loading-container">
+                        <div class="spinner"></div>
                     </div>
                 `;
                 return;
             }
 
-            db.collection('users')
-                .doc(userId)
-                .collection('statuses')
-                .orderBy('created_at', 'desc')
-                .limit(20)
-                .onSnapshot((snapshot) => {
-                    if (snapshot.empty) {
-                        statusContainer.innerHTML = `
-                            <div class="empty-state">
-                                <div class="empty-icon"><i class="fas fa-camera"></i></div>
-                                <div class="empty-title">No status updates</div>
-                                <div class="empty-subtitle">Tap + to add a status</div>
-                            </div>
-                        `;
-                        return;
-                    }
-
-                    let html = '<div class="status-list">';
-                    snapshot.forEach(doc => {
-                        const data = doc.data();
-                        const name = data.userName || 'Unknown';
-                        const avatar = data.userAvatar || null;
-                        const time = data.created_at ? formatTime(data.created_at) : '';
-
-                        html += `
-                            <a href="status_view.html?id=${doc.id}" class="status-item" style="text-decoration:none;color:inherit;display:flex;align-items:center;padding:12px;background:rgba(255,255,255,0.03);border-radius:12px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.05);">
-                                <div class="status-avatar" style="width:50px;height:50px;border-radius:50%;border:2px solid #8B5CF6;padding:2px;margin-right:14px;">
-                                    ${avatar ? `<img src="${avatar}" alt="${name}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />` : `<div style="width:100%;height:100%;border-radius:50%;background:#1a103c;display:flex;align-items:center;justify-content:center;color:#8B5CF6;font-size:20px;"><i class="fas fa-user"></i></div>`}
-                                </div>
-                                <div class="status-info" style="flex:1;">
-                                    <div class="status-name" style="font-weight:600;font-size:14px;">${escapeHtml(name)}</div>
-                                    <div class="status-time" style="font-size:12px;color:rgba(255,255,255,0.3);">${time}</div>
-                                </div>
-                            </a>
-                        `;
-                    });
-                    html += '</div>';
-                    statusContainer.innerHTML = html;
-                }, (error) => {
-                    console.error('Error loading statuses:', error);
-                });
-        }
-
-        // ============================================================
-        // FAB HANDLER
-        // ============================================================
-        function handleFabClick(e) {
-            e.preventDefault();
-            const path = window.location.pathname;
-            
-            if (path.includes('status.html')) {
-                openModal('statusModal');
-            } else if (path.includes('calls.html')) {
-                openModal('callModal');
-                generateChannelCode();
-            } else {
-                openModal('newChatModal');
+            if (chatProvider.chats.length === 0) {
+                chatsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="fas fa-comment-dots"></i></div>
+                        <div class="empty-title">No chats yet</div>
+                        <div class="empty-subtitle">Tap + to start a conversation</div>
+                    </div>
+                `;
+                return;
             }
-        }
 
-        // ============================================================
-        // MODAL HELPERS
-        // ============================================================
-        function openModal(id) {
-            document.getElementById(id).classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
+            let html = '<ul class="chat-list">';
+            chatProvider.chats.forEach(chat => {
+                const name = chat.name || 'Unknown';
+                const avatar = chat.avatar_url || null;
+                const lastMessage = chat.last_message || '';
+                const time = chat.last_message_at || null;
+                const unread = chat.unread_count || 0;
+                const chatType = chat.type || 'direct';
+                const isGroup = chatType === 'group';
+                const isChannel = chatType === 'channel';
 
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-            document.body.style.overflow = '';
-        }
-
-        function closeDialog(id) {
-            document.getElementById(id).classList.remove('active');
-            document.body.style.overflow = '';
-        }
-
-        // Close modal on overlay click
-        document.querySelectorAll('.modal-overlay, .dialog-overlay').forEach(el => {
-            el.addEventListener('click', (e) => {
-                if (e.target === el) {
-                    el.classList.remove('active');
-                    document.body.style.overflow = '';
+                let avatarHtml = '';
+                if (avatar) {
+                    avatarHtml = `<img src="${avatar}" alt="${name}" />`;
+                } else {
+                    let icon = 'fa-user';
+                    if (isChannel) icon = 'fa-bullhorn';
+                    else if (isGroup) icon = 'fa-users';
+                    avatarHtml = `<i class="fas ${icon} avatar-icon"></i>`;
                 }
+
+                const timeStr = time ? formatTime(time) : '';
+
+                let unreadHtml = '';
+                if (unread > 0) {
+                    unreadHtml = `<span class="chat-unread">${unread}</span>`;
+                }
+
+                const chatId = chat.id;
+                const href = isChannel 
+                    ? `channel.html?id=${chatId}&name=${encodeURIComponent(name)}`
+                    : `chat.html?id=${chatId}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar || '')}&group=${isGroup}`;
+
+                html += `
+                    <a href="${href}" class="chat-item" onclick="chatProvider.markMessagesAsRead('${chatId}')">
+                        <div class="chat-avatar">${avatarHtml}</div>
+                        <div class="chat-info">
+                            <div class="chat-header">
+                                <span class="chat-name">${escapeHtml(name)}</span>
+                                <span class="chat-time">${timeStr}</span>
+                            </div>
+                            <div class="chat-subtitle">
+                                <span class="chat-last-message">${escapeHtml(lastMessage)}</span>
+                                ${unreadHtml}
+                            </div>
+                        </div>
+                    </a>
+                `;
             });
-        });
-
-        // ============================================================
-        // MENU
-        // ============================================================
-        function showMenu() {
-            openModal('menuModal');
+            html += '</ul>';
+            chatsContainer.innerHTML = html;
         }
 
-        // ============================================================
-        // CALL FUNCTIONS
-        // ============================================================
-        function generateChannelCode() {
-            const code = 'aura_' + Math.random().toString(36).substring(2, 10);
-            document.getElementById('channelCode').textContent = code;
-            return code;
-        }
-
-        function showJoinDialog() {
-            closeModal('callModal');
-            document.getElementById('joinDialog').classList.add('active');
-            document.getElementById('joinCodeInput').value = '';
-            setTimeout(() => document.getElementById('joinCodeInput').focus(), 100);
-        }
-
-        function joinCall() {
-            const code = document.getElementById('joinCodeInput').value.trim();
-            if (code) {
-                closeDialog('joinDialog');
-                window.location.href = `call_active.html?channel=${encodeURIComponent(code)}`;
-            }
-        }
-
-        // ============================================================
-        // AUTH - SIGN OUT
-        // ============================================================
-        async function signOut() {
-            try {
-                await auth.signOut();
-                window.location.href = 'login.html';
-            } catch (error) {
-                console.error('Sign out error:', error);
-                alert('Error signing out. Please try again.');
-            }
-        }
-
-        // ============================================================
-        // UTILITY FUNCTIONS
-        // ============================================================
+        // ===== FORMAT TIME =====
         function formatTime(time) {
             if (!time) return '';
 
@@ -1161,20 +1609,89 @@
             return div.innerHTML;
         }
 
+        // ===== FAB HANDLER =====
+        function handleFabClick() {
+            openModal('newChatModal');
+        }
+
+        // ===== MODAL HELPERS =====
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        document.querySelectorAll('.modal-overlay').forEach(el => {
+            el.addEventListener('click', (e) => {
+                if (e.target === el) {
+                    el.classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+            });
+        });
+
+        // ===== MENU =====
+        function showMenu() {
+            openModal('menuModal');
+        }
+
+        // ===== SIGN OUT =====
+        async function signOut() {
+            try {
+                await auth.signOut();
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Sign out error:', error);
+                showToast('Error signing out');
+            }
+        }
+
+        // ===== INIT APP =====
+        function initApp() {
+            chatProvider = new ChatProvider();
+
+            chatProvider.addListener(() => {
+                renderChats();
+            });
+
+            renderChats();
+        }
+
         // ============================================================
-        // KEYBOARD SHORTCUTS
+        // START APP
         // ============================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check auth state
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    initApp();
+                } else {
+                    // Use mock user for demo
+                    chatProvider = new ChatProvider();
+                    chatProvider.setMockUser('mock_user_123');
+                    chatProvider.addListener(() => {
+                        renderChats();
+                    });
+                    renderChats();
+                }
+            });
+        });
+
+        // ===== KEYBOARD SHORTCUTS =====
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                document.querySelectorAll('.modal-overlay.active, .dialog-overlay.active').forEach(el => {
+                document.querySelectorAll('.modal-overlay.active').forEach(el => {
                     el.classList.remove('active');
                     document.body.style.overflow = '';
                 });
             }
         });
 
-        console.log('🚀 AURA Chat loaded successfully!');
-        console.log('📱 Connected to Firebase');
+        console.log('🚀 AURA Chat loaded with ChatProvider!');
     </script>
 
 </body>
