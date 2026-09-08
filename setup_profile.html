@@ -471,24 +471,67 @@
         let isExistingUser = false;
         let hasCompleteProfile = false;
         let existingUsername = '';
+        let existingDisplayName = '';
         let existingAvatarUrl = '';
-        let userId = '';
+        let userId = null;
 
-        // ─── ✅ FIXED: Wait for auth state before doing anything ──────
-        let authChecked = false;
+        // ─── LOCAL STORAGE HELPERS ────────────────────────────────────
+        function getLocal(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
 
+        function setLocal(key, value) {
+            try { localStorage.setItem(key, value); } catch (e) {}
+        }
+
+        function removeLocal(key) {
+            try { localStorage.removeItem(key); } catch (e) {}
+        }
+
+        // ─── ✅ FIXED: Check BOTH Firebase Auth AND localStorage ──────
+        function getUserId() {
+            // First try: Firebase Auth user
+            const user = auth.currentUser;
+            if (user) return user.uid;
+            
+            // Second try: localStorage mock user
+            const mockId = getLocal('mock_user_id');
+            if (mockId) return mockId;
+            
+            // Third try: pending email user
+            const pendingId = getLocal('pending_email_user_id');
+            if (pendingId) return pendingId;
+            
+            return null;
+        }
+
+        // ─── ✅ FIXED: Auth check with fallback ───────────────────────
         auth.onAuthStateChanged(function(user) {
-            authChecked = true;
-            if (user) {
-                userId = user.uid;
-                console.log('✅ User authenticated:', userId);
+            // Check all possible sources for user ID
+            const id = getUserId();
+            
+            if (id) {
+                userId = id;
+                console.log('✅ User found:', userId);
                 loadExistingProfile();
             } else {
-                // ✅ FIXED: If no user, redirect to email_verification
+                // No user anywhere → redirect to email_verification
                 console.log('⚠️ No user found, redirecting to email_verification');
                 window.location.href = '/email_verification.html';
             }
         });
+
+        // ─── Also check on page load (in case auth event already fired) ──
+        setTimeout(function() {
+            if (!userId) {
+                const id = getUserId();
+                if (id) {
+                    userId = id;
+                    console.log('✅ User found (delayed):', userId);
+                    loadExistingProfile();
+                }
+            }
+        }, 500);
 
         // ─── LOAD EXISTING PROFILE ──────────────────────────────────
         async function loadExistingProfile() {
@@ -511,6 +554,7 @@
                     isExistingUser = true;
                     hasCompleteProfile = usernameVal.length > 0 && displayNameVal.length > 0;
                     existingUsername = usernameVal;
+                    existingDisplayName = displayNameVal;
                     existingAvatarUrl = avatarUrl;
 
                     // Fill form
@@ -540,9 +584,15 @@
                     }
                 } else {
                     console.log('📝 New user, no profile yet');
+                    // Still save to Firestore with basic info
+                    await db.collection('users').doc(userId).set({
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    }, { merge: true });
                 }
             } catch (e) {
                 console.error('Load profile error:', e);
+                // If Firestore fails, still try to proceed
             }
         }
 
@@ -619,7 +669,7 @@
                 if (data.secure_url) {
                     await db.collection('users').doc(userId).set({
                         avatar_url: data.secure_url,
-                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                        updated_at: new Date().toISOString()
                     }, { merge: true });
                     return data.secure_url;
                 } else {
@@ -658,11 +708,11 @@
                 return;
             }
 
-            // Make sure we have a user
+            // Make sure we have a user ID
             if (!userId) {
-                const user = auth.currentUser;
-                if (user) {
-                    userId = user.uid;
+                const id = getUserId();
+                if (id) {
+                    userId = id;
                 } else {
                     showError('Not authenticated. Please try again.');
                     window.location.href = '/email_verification.html';
@@ -689,17 +739,33 @@
                 let photoUrl = null;
                 if (profileImage) {
                     photoUrl = await uploadProfileImage(userId);
+                } else if (existingAvatarUrl) {
+                    photoUrl = existingAvatarUrl;
                 }
 
-                // Save profile
+                // Save profile to Firestore
                 await db.collection('users').doc(userId).set({
                     username: usernameVal,
                     display_name: name,
                     bio: bioVal || '',
-                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    avatar_url: photoUrl || null,
+                    email: getLocal('mock_email') || '',
+                    updated_at: new Date().toISOString()
                 }, { merge: true });
 
-                // ✅ Redirect to chats
+                // Save to localStorage
+                setLocal('mock_user_id', userId);
+                setLocal('mock_username', usernameVal);
+                setLocal('mock_display_name', name);
+                setLocal('mock_bio', bioVal || '');
+                if (photoUrl) setLocal('mock_avatar', photoUrl);
+                setLocal('mock_has_profile', 'true');
+
+                // Clean up pending
+                removeLocal('pending_email_user_id');
+                removeLocal('pending_email');
+
+                // Redirect to chats
                 window.location.href = '/chats.html';
 
             } catch (e) {
@@ -748,7 +814,17 @@
             }
         });
 
-        console.log('👤 AURA Chat — Setup Profile (Fixed)');
+        // ─── CHECK LOCALSTORAGE ON LOAD ─────────────────────────────
+        // If user has mock_user_id but no Firebase auth, we still load
+        const mockId = getLocal('mock_user_id');
+        if (mockId && !auth.currentUser) {
+            userId = mockId;
+            console.log('✅ User from localStorage:', userId);
+            loadExistingProfile();
+        }
+
+        console.log('👤 AURA Chat — Setup Profile (Fully Fixed)');
+        console.log('🔑 User ID source: Firebase Auth + localStorage');
     </script>
 
 </body>
