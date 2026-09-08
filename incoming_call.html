@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Incoming Call - AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.05) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .container {
+            position: relative;
+            z-index: 2;
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 24px;
+            text-align: center;
+        }
+
+        /* ─── AVATAR ────────────────────────────────────────────── */
+        .avatar {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-shadow: 0 0 60px rgba(139, 92, 246, 0.3);
+            margin-bottom: 32px;
+            font-size: 56px;
+            font-weight: 700;
+            color: #fff;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .avatar .pulse-ring {
+            position: absolute;
+            inset: -20px;
+            border-radius: 50%;
+            border: 2px solid rgba(139, 92, 246, 0.2);
+            animation: ringPulse 2s ease-out infinite;
+        }
+
+        @keyframes ringPulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.3); opacity: 0; }
+        }
+
+        /* ─── NAME ────────────────────────────────────────────────── */
+        .name {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .call-type {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 48px;
+        }
+
+        /* ─── PULSE ANIMATION ────────────────────────────────────── */
+        .pulse-container {
+            margin-bottom: 48px;
+            width: 150px;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .pulse-container .ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid rgba(139, 92, 246, 0.1);
+            animation: pulseRing 2s ease-out infinite;
+        }
+
+        .pulse-container .ring:nth-child(1) { animation-delay: 0s; }
+        .pulse-container .ring:nth-child(2) { animation-delay: 0.7s; }
+        .pulse-container .ring:nth-child(3) { animation-delay: 1.4s; }
+
+        @keyframes pulseRing {
+            0% { width: 50px; height: 50px; opacity: 0.5; }
+            100% { width: 150px; height: 150px; opacity: 0; }
+        }
+
+        .pulse-container .phone-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(139, 92, 246, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            font-size: 28px;
+            color: #8B5CF6;
+        }
+
+        /* ─── ACTIONS ────────────────────────────────────────────── */
+        .actions {
+            display: flex;
+            gap: 64px;
+            margin-top: 16px;
+        }
+
+        .action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            border: none;
+            background: none;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .action-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .action-btn .circle {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: #fff;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+        }
+
+        .action-btn .circle.decline {
+            background: #ef4444;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.4);
+        }
+
+        .action-btn .circle.accept {
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
+        }
+
+        .action-btn .circle.accept.voice {
+            background: #10B981;
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.4);
+        }
+
+        .action-btn .label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* ─── RESPONSIVE ──────────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .container { padding: 20px 16px; }
+            .avatar { width: 120px; height: 120px; font-size: 44px; }
+            .name { font-size: 24px; }
+            .actions { gap: 40px; }
+            .action-btn .circle { width: 64px; height: 64px; font-size: 28px; }
+        }
+
+        @media (max-width: 400px) {
+            .avatar { width: 100px; height: 100px; font-size: 36px; }
+            .name { font-size: 20px; }
+            .actions { gap: 28px; }
+            .action-btn .circle { width: 56px; height: 56px; font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="container" id="app">
+
+        <!-- ─── AVATAR ────────────────────────────────────────────── -->
+        <div class="avatar" id="callerAvatar">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <span id="avatarText"><i class="fas fa-user"></i></span>
+            <img id="avatarImg" style="display:none;" />
+        </div>
+
+        <!-- ─── NAME ────────────────────────────────────────────────── -->
+        <div class="name" id="callerName">Unknown</div>
+        <div class="call-type" id="callType">Incoming video call...</div>
+
+        <!-- ─── PULSE ───────────────────────────────────────────────── -->
+        <div class="pulse-container">
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="phone-icon">
+                <i class="fas fa-phone"></i>
+            </div>
+        </div>
+
+        <!-- ─── ACTIONS ────────────────────────────────────────────── -->
+        <div class="actions">
+            <button class="action-btn" onclick="declineCall()">
+                <div class="circle decline">
+                    <i class="fas fa-phone-slash"></i>
+                </div>
+                <span class="label">Decline</span>
+            </button>
+            <button class="action-btn" onclick="acceptCall()">
+                <div class="circle accept" id="acceptBtn">
+                    <i class="fas fa-video" id="acceptIcon"></i>
+                </div>
+                <span class="label">Accept</span>
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
+            authDomain: "aurachat-85f54.firebaseapp.com",
+            projectId: "aurachat-85f54",
+            storageBucket: "aurachat-85f54.firebasestorage.app",
+            messagingSenderId: "539789121540",
+            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // ─── LOCAL STORAGE HELPERS ────────────────────────────────────
+        function getLocal(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+
+        // ─── DOM REFS ──────────────────────────────────────────────────
+        const callerName = document.getElementById('callerName');
+        const callerType = document.getElementById('callType');
+        const callerAvatar = document.getElementById('callerAvatar');
+        const avatarText = document.getElementById('avatarText');
+        const avatarImg = document.getElementById('avatarImg');
+        const acceptBtn = document.getElementById('acceptBtn');
+        const acceptIcon = document.getElementById('acceptIcon');
+
+        // ─── STATE ─────────────────────────────────────────────────────
+        let callData = null;
+        let timeoutTimer = null;
+        let ringingAudio = null;
+
+        // ─── GET CALL DATA FROM URL ──────────────────────────────────
+        function getCallData() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                callerId: params.get('callerId') || '',
+                callerName: params.get('callerName') || 'Unknown',
+                callerAvatar: params.get('callerAvatar') || '',
+                callId: params.get('callId') || 'call_' + Date.now(),
+                channelName: params.get('channelName') || 'call_' + Date.now(),
+                isVideoCall: params.get('isVideoCall') === 'true'
+            };
+        }
+
+        // ─── INIT ─────────────────────────────────────────────────────
+        function initIncomingCall() {
+            callData = getCallData();
+
+            // Set UI
+            callerName.textContent = callData.callerName;
+
+            if (callData.isVideoCall) {
+                callerType.textContent = 'Incoming video call...';
+                acceptBtn.className = 'circle accept';
+                acceptIcon.className = 'fas fa-video';
+            } else {
+                callerType.textContent = 'Incoming voice call...';
+                acceptBtn.className = 'circle accept voice';
+                acceptIcon.className = 'fas fa-phone';
+            }
+
+            // Set avatar
+            if (callData.callerAvatar && callData.callerAvatar.length > 0) {
+                avatarImg.src = callData.callerAvatar;
+                avatarImg.style.display = 'block';
+                avatarText.style.display = 'none';
+            } else {
+                const initial = callData.callerName.charAt(0).toUpperCase();
+                avatarText.innerHTML = initial;
+                avatarText.style.display = 'flex';
+                avatarImg.style.display = 'none';
+            }
+
+            // Start ringing
+            startRinging();
+
+            // Start timeout (30 seconds)
+            timeoutTimer = setTimeout(function() {
+                declineCall();
+            }, 30000);
+
+            // Hide loader
+            document.body.style.opacity = '1';
+
+            console.log('📞 Incoming call from:', callData.callerName);
+        }
+
+        // ─── RINGTONE ─────────────────────────────────────────────────
+        function startRinging() {
+            try {
+                // Simulate ringing with a simple beep pattern
+                let beepCount = 0;
+                const beepInterval = setInterval(function() {
+                    beepCount++;
+                    // Simple beep using AudioContext
+                    try {
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.frequency.value = 440;
+                        gainNode.gain.value = 0.3;
+                        oscillator.start();
+                        setTimeout(() => {
+                            oscillator.stop();
+                        }, 300);
+                    } catch (e) {
+                        // Silently fail
+                    }
+
+                    if (beepCount >= 15) {
+                        clearInterval(beepInterval);
+                    }
+                }, 2000);
+
+                // Store interval for cleanup
+                window._beepInterval = beepInterval;
+
+            } catch (e) {
+                console.warn('Ringtone error:', e);
+            }
+        }
+
+        function stopRinging() {
+            if (window._beepInterval) {
+                clearInterval(window._beepInterval);
+                window._beepInterval = null;
+            }
+        }
+
+        // ─── ACCEPT CALL ─────────────────────────────────────────────
+        function acceptCall() {
+            stopRinging();
+            if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = null;
+            }
+
+            // Simulate answering
+            console.log('✅ Call accepted');
+
+            // Navigate to active call
+            const params = new URLSearchParams({
+                channelName: callData.channelName,
+                isVideoCall: callData.isVideoCall,
+                targetUserId: callData.callerId,
+                targetUserName: callData.callerName
+            });
+
+            window.location.href = '/active_call.html?' + params.toString();
+        }
+
+        // ─── DECLINE CALL ────────────────────────────────────────────
+        function declineCall() {
+            stopRinging();
+            if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = null;
+            }
+
+            console.log('❌ Call declined');
+
+            // Show declined message and go back
+            const msg = document.createElement('div');
+            msg.style.cssText = `
+                position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+                background: rgba(239,68,68,0.9); color: white; padding: 12px 24px;
+                border-radius: 12px; font-weight: 600; z-index: 999;
+                animation: fadeIn 0.3s ease;
+            `;
+            msg.textContent = 'Call declined';
+            document.body.appendChild(msg);
+
+            setTimeout(() => {
+                msg.remove();
+                window.location.href = '/calls.html';
+            }, 1500);
+        }
+
+        // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                acceptCall();
+            }
+            if (e.key === 'Escape') {
+                declineCall();
+            }
+        });
+
+        // ─── START ─────────────────────────────────────────────────────
+        // Check if user is logged in
+        auth.onAuthStateChanged(function(user) {
+            const id = user ? user.uid : getLocal('mock_user_id');
+            if (id) {
+                initIncomingCall();
+            } else {
+                // Not logged in - show error and redirect
+                document.body.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;padding:20px;">
+                        <i class="fas fa-exclamation-circle" style="font-size:48px;color:#ef4444;"></i>
+                        <h2 style="color:#fff;">Not signed in</h2>
+                        <p style="color:rgba(255,255,255,0.4);">Please sign in to receive calls</p>
+                        <button onclick="window.location.href='/onboarding.html'" style="padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;margin-top:8px;">Get Started</button>
+                    </div>
+                `;
+            }
+        });
+
+        // ─── CLEANUP ──────────────────────────────────────────────────
+        window.addEventListener('beforeunload', function() {
+            stopRinging();
+            if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = null;
+            }
+        });
+
+        console.log('📞 AURA Chat — Incoming Call Screen');
+        console.log('⌨️  Press ENTER/SPACE to accept, ESC to decline');
+    </script>
+
+</body>
+</html>
