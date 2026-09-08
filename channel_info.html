@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Channel Info - AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .app {
+            position: relative;
+            z-index: 2;
+            max-width: 480px;
+            margin: 0 auto;
+            width: 100%;
+            min-height: 100vh;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
+        }
+
+        /* ─── HEADER ────────────────────────────────────────────── */
+        .header {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            background: rgba(10, 10, 15, 0.95);
+            backdrop-filter: blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .header .back {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        .header .title {
+            flex: 1;
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .header .actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .header .actions button {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 12px;
+            transition: background 0.3s ease;
+        }
+
+        .header .actions button:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .header .actions button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        /* ─── CONTENT ────────────────────────────────────────────── */
+        .content {
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        /* ─── CHANNEL HEADER ────────────────────────────────────── */
+        .channel-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .channel-header .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #1a103c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            overflow: hidden;
+            border: 2px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .channel-header .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .channel-header .avatar i {
+            font-size: 40px;
+            color: #8B5CF6;
+        }
+
+        .channel-header .name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .channel-header .name .badge {
+            display: inline-block;
+            margin-left: 6px;
+            font-size: 14px;
+            color: #1DA1F2;
+        }
+
+        .channel-header .desc {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 4px;
+        }
+
+        .channel-header .meta {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.3);
+            margin-top: 4px;
+        }
+
+        /* ─── ACTION BUTTONS ────────────────────────────────────── */
+        .actions-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .actions-row .action-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(139, 92, 246, 0.12);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .actions-row .action-btn:hover {
+            background: rgba(139, 92, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .actions-row .action-btn .icon {
+            font-size: 20px;
+            color: #8B5CF6;
+            display: block;
+        }
+
+        .actions-row .action-btn .label {
+            font-size: 12px;
+            color: #8B5CF6;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+
+        .actions-row .action-btn.danger .icon { color: #ef4444; }
+        .actions-row .action-btn.danger .label { color: #ef4444; }
+        .actions-row .action-btn.danger { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); }
+        .actions-row .action-btn.danger:hover { background: rgba(239, 68, 68, 0.2); }
+
+        /* ─── INVITATION LINK ────────────────────────────────────── */
+        .invite-section {
+            padding: 16px;
+            background: rgba(139, 92, 246, 0.06);
+            border: 1px solid rgba(139, 92, 246, 0.15);
+            border-radius: 16px;
+            margin-bottom: 24px;
+        }
+
+        .invite-section .header-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .invite-section .header-row .icon { color: #8B5CF6; font-size: 18px; }
+        .invite-section .header-row .label {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(139, 92, 246, 0.9);
+            letter-spacing: 0.5px;
+        }
+        .invite-section .header-row .regenerate {
+            font-size: 11px;
+            color: #f59e0b;
+            cursor: pointer;
+            padding: 4px 10px;
+            border-radius: 8px;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .invite-section .header-row .regenerate:hover {
+            background: rgba(245, 158, 11, 0.2);
+        }
+
+        .invite-section .code-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .invite-section .code-box .code-label {
+            padding: 4px 8px;
+            background: rgba(139, 92, 246, 0.15);
+            border-radius: 6px;
+            font-size: 9px;
+            font-weight: 700;
+            color: #8B5CF6;
+            letter-spacing: 1px;
+        }
+
+        .invite-section .code-box .code-text {
+            flex: 1;
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            font-family: monospace;
+            letter-spacing: 1px;
+        }
+
+        .invite-section .code-box .copy-icon {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 16px;
+        }
+
+        .invite-section .link-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 14px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .invite-section .link-box .link-text {
+            flex: 1;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .invite-section .link-box .copy-btn {
+            padding: 8px;
+            border-radius: 8px;
+            background: rgba(139, 92, 246, 0.15);
+            color: #8B5CF6;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .invite-section .link-box .copy-btn:hover {
+            background: rgba(139, 92, 246, 0.25);
+        }
+
+        .invite-section .share-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .invite-section .share-row .share-btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            border: none;
+            color: #fff;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .invite-section .share-row .share-btn:hover {
+            opacity: 0.9;
+        }
+
+        .invite-section .share-row .copy-link-btn {
+            padding: 10px 16px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .invite-section .share-row .copy-link-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* ─── INFO ROWS ──────────────────────────────────────────── */
+        .info-card {
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            margin-bottom: 24px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            gap: 12px;
+        }
+
+        .info-row .icon {
+            width: 20px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .info-row .label {
+            flex: 1;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .info-row .value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        /* ─── SETTINGS PREVIEW ───────────────────────────────────── */
+        .settings-preview {
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            margin-bottom: 24px;
+        }
+
+        .settings-preview .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(139, 92, 246, 0.8);
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            gap: 12px;
+        }
+
+        .setting-row .icon {
+            width: 18px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .setting-row .label {
+            flex: 1;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .setting-row .status {
+            font-size: 18px;
+        }
+
+        .setting-row .status.on { color: #10B981; }
+        .setting-row .status.off { color: #ef4444; }
+
+        /* ─── MEMBERS ────────────────────────────────────────────── */
+        .members-section .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(139, 92, 246, 0.8);
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+        }
+
+        .member-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .member-item .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #1a103c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            flex-shrink: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #8B5CF6;
+        }
+
+        .member-item .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .member-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .member-item .info .name {
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .member-item .info .name .you {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+            margin-left: 6px;
+        }
+
+        .member-item .info .role {
+            font-size: 12px;
+        }
+
+        .member-item .info .role.owner { color: #f59e0b; }
+        .member-item .info .role.admin { color: #8B5CF6; }
+        .member-item .info .role.member { color: rgba(255, 255, 255, 0.3); }
+
+        .member-item .more-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 8px;
+        }
+
+        .member-item .more-btn:hover {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* ─── MODAL ────────────────────────────────────────────────── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: #1a103c;
+            border-radius: 24px 24px 0 0;
+            padding: 20px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            0% { transform: translateY(100%); }
+            100% { transform: translateY(0); }
+        }
+
+        .modal-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin: 0 auto 16px;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .modal-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .modal-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .modal-item .icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .modal-item .icon.purple { background: rgba(139, 92, 246, 0.2); color: #8B5CF6; }
+        .modal-item .icon.orange { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .modal-item .icon.red { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+        .modal-item .label {
+            flex: 1;
+            font-size: 15px;
+            color: #fff;
+        }
+
+        .modal-item .label .sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ─── LOADER ────────────────────────────────────────────── */
+        .loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .loader .spinner {
+            width: 30px;
+            height: 30px;
+            border: 2px solid rgba(139, 92, 246, 0.1);
+            border-top-color: #8B5CF6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ─── RESPONSIVE ──────────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .app { max-width: 100%; }
+            .content { padding: 12px; }
+            .channel-header .avatar { width: 64px; height: 64px; }
+            .channel-header .avatar i { font-size: 32px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="app" id="app">
+
+        <!-- ─── HEADER ────────────────────────────────────────────── -->
+        <div class="header">
+            <button class="back" onclick="window.history.back()">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="title">Channel Info</div>
+            <div class="actions" id="headerActions">
+                <!-- Dynamically loaded -->
+            </div>
+        </div>
+
+        <!-- ─── CONTENT ────────────────────────────────────────────── -->
+        <div class="content" id="content">
+            <div class="loader">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ─── MEMBER OPTIONS MODAL ──────────────────────────────────── -->
+    <div class="modal-overlay" id="memberModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title" id="memberModalTitle">Member</div>
+            <div id="memberModalItems"></div>
+        </div>
+    </div>
+
+    <!-- ─── SETTINGS MODAL ─────────────────────────────────────────── -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title">Channel Settings</div>
+            <div id="settingsModalItems"></div>
+        </div>
+    </div>
+
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
+            authDomain: "aurachat-85f54.firebaseapp.com",
+            projectId: "aurachat-85f54",
+            storageBucket: "aurachat-85f54.firebasestorage.app",
+            messagingSenderId: "539789121540",
+            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // ─── GET CHANNEL ID FROM URL ─────────────────────────────────
+        const urlParams = new URLSearchParams(window.location.search);
+        const chatId = urlParams.get('chatId');
+        let currentUserId = '';
+        let channelData = null;
+        let invitationLink = '';
+        let invitationCode = '';
+        let myRole = 'member';
+        let isOwner = false;
+        let isAdmin = false;
+        let canManage = false;
+
+        // ─── DOM REFS ──────────────────────────────────────────────────
+        const content = document.getElementById('content');
+        const headerActions = document.getElementById('headerActions');
+
+        // ─── AUTH ──────────────────────────────────────────────────────
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                currentUserId = user.uid;
+                loadChannel();
+            } else {
+                const mockUser = localStorage.getItem('aura_user');
+                if (mockUser) {
+                    currentUserId = mockUser;
+                    loadChannel();
+                } else {
+                    window.location.href = '/email_verification.html';
+                }
+            }
+        });
+
+        // ─── LOAD CHANNEL ─────────────────────────────────────────────
+        async function loadChannel() {
+            if (!chatId) {
+                content.innerHTML = '<div style="text-align:center;color:red;padding:40px;">No channel selected</div>';
+                return;
+            }
+
+            try {
+                const doc = await db.collection('chats').doc(chatId).get();
+                if (!doc.exists) {
+                    content.innerHTML = '<div style="text-align:center;color:red;padding:40px;">Channel not found</div>';
+                    return;
+                }
+
+                channelData = doc.data();
+                const participants = channelData.participants || [];
+                const participantsData = channelData.participants_data || {};
+
+                myRole = participantsData[currentUserId]?.role || 'member';
+                isOwner = myRole === 'owner';
+                isAdmin = myRole === 'admin';
+                canManage = isOwner || isAdmin;
+
+                // Load invitation link
+                await loadInvitationLink();
+
+                renderChannel();
+                renderHeaderActions();
+
+            } catch (e) {
+                console.error('Load channel error:', e);
+                content.innerHTML = `<div style="text-align:center;color:red;padding:40px;">Error: ${e.message}</div>`;
+            }
+        }
+
+        // ─── LOAD INVITATION LINK ────────────────────────────────────
+        async function loadInvitationLink() {
+            try {
+                // Try to get from invitations collection
+                const snapshot = await db.collection('invitations')
+                    .where('chat_id', '==', chatId)
+                    .where('chat_type', '==', 'channel')
+                    .limit(1)
+                    .get();
+
+                if (!snapshot.empty) {
+                    const data = snapshot.docs[0].data();
+                    invitationCode = snapshot.docs[0].id;
+                    invitationLink = `${window.location.origin}/invite/${invitationCode}`;
+                } else {
+                    // Create invitation if not exists
+                    const inviteId = 'invite_' + Date.now();
+                    await db.collection('invitations').doc(inviteId).set({
+                        chat_id: chatId,
+                        chat_name: channelData.name || 'Channel',
+                        chat_type: 'channel',
+                        created_by: currentUserId,
+                        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        uses: 0,
+                        max_uses: -1
+                    });
+                    invitationCode = inviteId;
+                    invitationLink = `${window.location.origin}/invite/${inviteId}`;
+                }
+            } catch (e) {
+                console.error('Load invitation error:', e);
+            }
+        }
+
+        // ─── RENDER CHANNEL ──────────────────────────────────────────
+        function renderChannel() {
+            const memberCount = channelData.member_count || (channelData.participants || []).length;
+            const description = channelData.description || '';
+            const avatarUrl = channelData.avatar_url || '';
+            const name = channelData.name || 'Unknown';
+            const createdByEmail = channelData.created_by_email || '';
+
+            let html = `
+                <!-- ─── CHANNEL HEADER ────────────────────────────── -->
+                <div class="channel-header">
+                    <div class="avatar">
+                        ${avatarUrl ? `<img src="${avatarUrl}" />` : '<i class="fas fa-bullhorn"></i>'}
+                    </div>
+                    <div class="name">
+                        ${name}
+                        <span class="badge"><i class="fas fa-check-circle" style="color:#1DA1F2;"></i></span>
+                    </div>
+                    ${description ? `<div class="desc">${description}</div>` : ''}
+                    <div class="meta">${memberCount} members · Channel</div>
+                </div>
+
+                <!-- ─── ACTIONS ────────────────────────────────────── -->
+                <div class="actions-row">
+                    <div class="action-btn" onclick="shareInvitation()">
+                        <span class="icon"><i class="fas fa-share-alt"></i></span>
+                        <span class="label">Invite</span>
+                    </div>
+                    ${!isOwner ? `
+                        <div class="action-btn danger" onclick="leaveChannel()">
+                            <span class="icon"><i class="fas fa-sign-out-alt"></i></span>
+                            <span class="label">Leave</span>
+                        </div>
+                    ` : `
+                        <div class="action-btn danger" onclick="deleteChannel()">
+                            <span class="icon"><i class="fas fa-trash-alt"></i></span>
+                            <span class="label">Delete</span>
+                        </div>
+                    `}
+                </div>
+            `;
+
+            // ─── INVITATION LINK ────────────────────────────────────
+            if (invitationLink) {
+                html += `
+                    <div class="invite-section">
+                        <div class="header-row">
+                            <span class="icon"><i class="fas fa-link"></i></span>
+                            <span class="label">Invitation Link</span>
+                            ${canManage ? `
+                                <span class="regenerate" onclick="regenerateLink()">
+                                    <i class="fas fa-sync-alt"></i> Regenerate
+                                </span>
+                            ` : ''}
+                        </div>
+
+                        ${invitationCode ? `
+                            <div class="code-box" onclick="copyCode()">
+                                <span class="code-label">CODE</span>
+                                <span class="code-text">${invitationCode}</span>
+                                <span class="copy-icon"><i class="fas fa-copy"></i></span>
+                            </div>
+                        ` : ''}
+
+                        <div class="link-box">
+                            <span class="link-text">${invitationLink}</span>
+                            <span class="copy-btn" onclick="copyLink()"><i class="fas fa-copy"></i></span>
+                        </div>
+
+                        <div class="share-row">
+                            <button class="share-btn" onclick="shareInvitation()">
+                                <i class="fas fa-share-alt"></i> Share Link
+                            </button>
+                            <button class="copy-link-btn" onclick="copyLink()">Copy</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // ─── INFO CARD ──────────────────────────────────────────
+            html += `
+                <div class="info-card">
+                    <div class="info-row">
+                        <span class="icon"><i class="fas fa-bullhorn"></i></span>
+                        <span class="label">Channel Type</span>
+                        <span class="value">Broadcast</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="icon"><i class="fas fa-user-shield"></i></span>
+                        <span class="label">Messaging</span>
+                        <span class="value">Admin-only</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="icon"><i class="fas fa-eye"></i></span>
+                        <span class="label">Members can</span>
+                        <span class="value">View only</span>
+                    </div>
+                </div>
+            `;
+
+            // ─── SETTINGS PREVIEW ──────────────────────────────────
+            if (canManage) {
+                const settings = channelData.settings || {};
+                html += `
+                    <div class="settings-preview">
+                        <div class="section-title"><i class="fas fa-cog"></i> Settings</div>
+                        <div class="setting-row">
+                            <span class="icon"><i class="fas fa-comment"></i></span>
+                            <span class="label">Chat Enabled</span>
+                            <span class="status ${settings.chat_disabled ? 'off' : 'on'}"><i class="fas ${settings.chat_disabled ? 'fa-times-circle' : 'fa-check-circle'}"></i></span>
+                        </div>
+                        <div class="setting-row">
+                            <span class="icon"><i class="fas fa-paperclip"></i></span>
+                            <span class="label">File Sharing</span>
+                            <span class="status ${settings.file_sharing_disabled ? 'off' : 'on'}"><i class="fas ${settings.file_sharing_disabled ? 'fa-times-circle' : 'fa-check-circle'}"></i></span>
+                        </div>
+                        <div class="setting-row">
+                            <span class="icon"><i class="fas fa-poll"></i></span>
+                            <span class="label">Polls</span>
+                            <span class="status ${settings.polls_enabled !== false ? 'on' : 'off'}"><i class="fas ${settings.polls_enabled !== false ? 'fa-check-circle' : 'fa-times-circle'}"></i></span>
+                        </div>
+                        <div class="setting-row">
+                            <span class="icon"><i class="fas fa-smile"></i></span>
+                            <span class="label">Reactions</span>
+                            <span class="status ${settings.reactions_enabled !== false ? 'on' : 'off'}"><i class="fas ${settings.reactions_enabled !== false ? 'fa-check-circle' : 'fa-times-circle'}"></i></span>
+                        </div>
+                        ${isOwner ? `
+                            <div class="setting-row">
+                                <span class="icon"><i class="fas fa-microphone"></i></span>
+                                <span class="label">Voice Chat</span>
+                                <span class="status ${settings.voice_chat_enabled ? 'on' : 'off'}"><i class="fas ${settings.voice_chat_enabled ? 'fa-check-circle' : 'fa-times-circle'}"></i></span>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            // ─── MEMBERS ─────────────────────────────────────────────
+            html += `
+                <div class="members-section">
+                    <div class="section-title"><i class="fas fa-users"></i> Members (${memberCount})</div>
+                    <div id="membersList">
+                        <div class="loader"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = html;
+
+            // Load members
+            loadMembers();
+        }
+
+        // ─── RENDER HEADER ACTIONS ──────────────────────────────────
+        function renderHeaderActions() {
+            let html = '';
+
+            if (canManage) {
+                html += `
+                    <button onclick="startCall(true)" title="Video Call"><i class="fas fa-video"></i></button>
+                    <button onclick="startCall(false)" title="Voice Call"><i class="fas fa-phone"></i></button>
+                    <button onclick="showAddMembers()" title="Add Members"><i class="fas fa-user-plus"></i></button>
+                `;
+            }
+
+            html += `
+                <button onclick="shareInvitation()" title="Share"><i class="fas fa-share-alt"></i></button>
+                ${canManage ? `<button onclick="showSettings()" title="Settings"><i class="fas fa-cog"></i></button>` : ''}
+            `;
+
+            headerActions.innerHTML = html;
+        }
+
+        // ─── LOAD MEMBERS ─────────────────────────────────────────────
+        async function loadMembers() {
+            const membersList = document.getElementById('membersList');
+            if (!membersList) return;
+
+            const participants = channelData.participants || [];
+            const participantsData = channelData.participants_data || {};
+
+            try {
+                const users = [];
+                for (const uid of participants) {
+                    const doc = await db.collection('users').doc(uid).get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        data.uid = uid;
+                        data.role = participantsData[uid]?.role || 'member';
+                        users.push(data);
+                    }
+                }
+
+                // Sort: owner -> admin -> member
+                users.sort((a, b) => {
+                    const order = { owner: 0, admin: 1, member: 2 };
+                    return (order[a.role] || 3) - (order[b.role] || 3);
+                });
+
+                let html = '';
+                for (const user of users) {
+                    const isMe = user.uid === currentUserId;
+                    const roleLabel = user.role === 'owner' ? 'Owner' : user.role === 'admin' ? 'Admin' : 'Subscriber';
+                    const roleClass = user.role === 'owner' ? 'owner' : user.role === 'admin' ? 'admin' : 'member';
+
+                    html += `
+                        <div class="member-item" onclick="${!isMe ? `viewProfile('${user.uid}')` : ''}">
+                            <div class="avatar">
+                                ${user.avatar_url ? `<img src="${user.avatar_url}" />` : (user.username ? user.username.charAt(0).toUpperCase() : 'U')}
+                            </div>
+                            <div class="info">
+                                <div class="name">
+                                    ${user.username || 'Unknown'}
+                                    ${isMe ? `<span class="you">(You)</span>` : ''}
+                                </div>
+                                <div class="role ${roleClass}">${roleLabel}</div>
+                            </div>
+                            ${!isMe && canManage && user.role !== 'owner' ? `
+                                <button class="more-btn" onclick="event.stopPropagation(); showMemberOptions('${user.uid}', '${user.username || 'Unknown'}', '${user.role}')">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                membersList.innerHTML = html;
+
+            } catch (e) {
+                console.error('Load members error:', e);
+                membersList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">Error loading members</div>';
+            }
+        }
+
+        // ─── ACTIONS ──────────────────────────────────────────────────
+
+        function shareInvitation() {
+            if (!invitationLink) {
+                alert('No invitation link available');
+                return;
+            }
+
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Join AURA Chat',
+                    text: `Join ${channelData.name || 'Channel'} on AURA Chat!\n\nChannel\nMembers: ${channelData.member_count || 0}\n\nTap to join: ${invitationLink}`,
+                    url: invitationLink
+                }).catch(() => {});
+            } else {
+                // Fallback
+                copyLink();
+                alert('Link copied to clipboard!');
+            }
+        }
+
+        function copyLink() {
+            if (!invitationLink) return;
+            navigator.clipboard.writeText(invitationLink).then(() => {
+                alert('Link copied to clipboard!');
+            }).catch(() => {
+                // Fallback
+                const el = document.createElement('textarea');
+                el.value = invitationLink;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                alert('Link copied to clipboard!');
+            });
+        }
+
+        function copyCode() {
+            if (!invitationCode) return;
+            navigator.clipboard.writeText(invitationCode).then(() => {
+                alert('Code copied to clipboard!');
+            }).catch(() => {
+                const el = document.createElement('textarea');
+                el.value = invitationCode;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                alert('Code copied to clipboard!');
+            });
+        }
+
+        async function regenerateLink() {
+            if (!confirm('This will invalidate the current invitation link and create a new one. Anyone with the old link will no longer be able to join.')) return;
+
+            try {
+                // Delete old invitation
+                if (invitationCode) {
+                    await db.collection('invitations').doc(invitationCode).delete();
+                }
+
+                // Create new invitation
+                const inviteId = 'invite_' + Date.now();
+                await db.collection('invitations').doc(inviteId).set({
+                    chat_id: chatId,
+                    chat_name: channelData.name || 'Channel',
+                    chat_type: 'channel',
+                    created_by: currentUserId,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    uses: 0,
+                    max_uses: -1
+                });
+
+                invitationCode = inviteId;
+                invitationLink = `${window.location.origin}/invite/${inviteId}`;
+
+                alert('Invitation link regenerated successfully!');
+                renderChannel();
+
+            } catch (e) {
+                console.error('Regenerate error:', e);
+                alert('Failed to regenerate link: ' + e.message);
+            }
+        }
+
+        function viewProfile(userId) {
+            window.location.href = `/public_profile.html?userId=${userId}`;
+        }
+
+        // ─── MEMBER OPTIONS ──────────────────────────────────────────
+        function showMemberOptions(memberId, memberName, memberRole) {
+            const modal = document.getElementById('memberModal');
+            const title = document.getElementById('memberModalTitle');
+            const items = document.getElementById('memberModalItems');
+
+            title.textContent = memberName;
+
+            let html = '';
+
+            if (isOwner && memberRole === 'member') {
+                html += `
+                    <div class="modal-item" onclick="closeModal('memberModal'); promoteAdmin('${memberId}')">
+                        <div class="icon purple"><i class="fas fa-user-cog"></i></div>
+                        <div class="label">Promote to Admin</div>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="modal-item" onclick="closeModal('memberModal'); kickMember('${memberId}', '${memberName}')">
+                    <div class="icon orange"><i class="fas fa-user-minus"></i></div>
+                    <div class="label">Kick</div>
+                </div>
+                <div class="modal-item" onclick="closeModal('memberModal'); banMember('${memberId}', '${memberName}')">
+                    <div class="icon red"><i class="fas fa-ban"></i></div>
+                    <div class="label" style="color:#ef4444;">Ban</div>
+                </div>
+            `;
+
+            items.innerHTML = html;
+            modal.classList.add('show');
+        }
+
+        async function promoteAdmin(memberId) {
+            try {
+                await db.collection('chats').doc(chatId).update({
+                    [`participants_data.${memberId}.role`]: 'admin'
+                });
+                alert('Member promoted to admin!');
+                loadChannel();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function kickMember(memberId, memberName) {
+            if (!confirm(`Kick ${memberName} from this channel?`)) return;
+
+            try {
+                await db.collection('chats').doc(chatId).update({
+                    participants: firebase.firestore.FieldValue.arrayRemove(memberId),
+                    [`participants_data.${memberId}`]: firebase.firestore.FieldValue.delete(),
+                    member_count: firebase.firestore.FieldValue.increment(-1)
+                });
+                alert('Member kicked!');
+                loadChannel();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function banMember(memberId, memberName) {
+            if (!confirm(`Ban ${memberName} from this channel? They will not be able to rejoin.`)) return;
+
+            try {
+                await db.collection('chats').doc(chatId).update({
+                    participants: firebase.firestore.FieldValue.arrayRemove(memberId),
+                    [`participants_data.${memberId}`]: firebase.firestore.FieldValue.delete(),
+                    banned_users: firebase.firestore.FieldValue.arrayUnion(memberId),
+                    member_count: firebase.firestore.FieldValue.increment(-1)
+                });
+                alert('Member banned!');
+                loadChannel();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // ─── ADD MEMBERS ─────────────────────────────────────────────
+        function showAddMembers() {
+            // Simple implementation - search users
+            const search = prompt('Search for user by username:');
+            if (!search || search.trim().length < 2) return;
+
+            db.collection('users')
+                .where('username', '>=', search.trim())
+                .where('username', '<=', search.trim() + '\uf8ff')
+                .limit(10)
+                .get()
+                .then((snapshot) => {
+                    if (snapshot.empty) {
+                        alert('No users found');
+                        return;
+                    }
+
+                    let msg = 'Select a user to add:\n\n';
+                    const users = [];
+                    snapshot.docs.forEach((doc, i) => {
+                        const data = doc.data();
+                        users.push({ id: doc.id, ...data });
+                        msg += `${i+1}. ${data.username || 'Unknown'}\n`;
+                    });
+
+                    const choice = prompt(msg + '\nEnter number:');
+                    const idx = parseInt(choice) - 1;
+                    if (idx >= 0 && idx < users.length) {
+                        addMember(users[idx]);
+                    }
+                })
+                .catch(e => alert('Error searching: ' + e.message));
+        }
+
+        async function addMember(user) {
+            const userId = user.id;
+
+            try {
+                // Check privacy settings
+                const userDoc = await db.collection('users').doc(userId).get();
+                const privacy = userDoc.data()?.privacy_settings || {};
+                if (privacy.allow_add_to_group === false) {
+                    alert('This user has disabled being added to channels. Send them an invitation link instead.');
+                    return;
+                }
+
+                await db.collection('chats').doc(chatId).update({
+                    participants: firebase.firestore.FieldValue.arrayUnion(userId),
+                    [`participants_data.${userId}`]: {
+                        role: 'member',
+                        joined_at: firebase.firestore.FieldValue.serverTimestamp()
+                    },
+                    member_count: firebase.firestore.FieldValue.increment(1)
+                });
+
+                alert('Member added successfully!');
+                loadChannel();
+
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // ─── LEAVE CHANNEL ───────────────────────────────────────────
+        async function leaveChannel() {
+            if (!confirm('Leave this channel? You will no longer receive messages.')) return;
+
+            try {
+                await db.collection('chats').doc(chatId).update({
+                    participants: firebase.firestore.FieldValue.arrayRemove(currentUserId),
+                    [`participants_data.${currentUserId}`]: firebase.firestore.FieldValue.delete(),
+                    member_count: firebase.firestore.FieldValue.increment(-1)
+                });
+
+                window.location.href = '/chats.html';
+
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // ─── DELETE CHANNEL ──────────────────────────────────────────
+        async function deleteChannel() {
+            if (!confirm('⚠️ Delete this channel permanently? All messages will be lost. This cannot be undone.')) return;
+
+            try {
+                // Delete all messages
+                const messages = await db.collection('chats').doc(chatId).collection('messages').get();
+                const batch = db.batch();
+                messages.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+
+                // Delete channel
+                await db.collection('chats').doc(chatId).delete();
+
+                alert('Channel deleted!');
+                window.location.href = '/chats.html';
+
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // ─── CALL ─────────────────────────────────────────────────────
+        function startCall(video) {
+            alert(video ? 'Video call coming soon!' : 'Voice call coming soon!');
+        }
+
+        // ─── SETTINGS ─────────────────────────────────────────────────
+        function showSettings() {
+            const modal = document.getElementById('settingsModal');
+            const items = document.getElementById('settingsModalItems');
+
+            const settings = channelData.settings || {};
+
+            let html = '';
+
+            const toggles = [
+                { key: 'chat_disabled', label: 'Disable Chat', sub: 'Only admins can send messages', value: settings.chat_disabled || false },
+                { key: 'file_sharing_disabled', label: 'Disable File Sharing', sub: 'Prevent members from sending files', value: settings.file_sharing_disabled || false },
+                { key: 'polls_enabled', label: 'Enable Polls', value: settings.polls_enabled !== false },
+                { key: 'reactions_enabled', label: 'Enable Reactions', value: settings.reactions_enabled !== false },
+                { key: 'forwarding_enabled', label: 'Allow Forwarding', value: settings.forwarding_enabled !== false },
+            ];
+
+            if (isOwner) {
+                toggles.push({ key: 'voice_chat_enabled', label: 'Enable Voice Chat', value: settings.voice_chat_enabled || false });
+            }
+
+            html = toggles.map(t => `
+                <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.03);">
+                    <div style="flex:1;">
+                        <div style="color:#fff;font-size:14px;">${t.label}</div>
+                        ${t.sub ? `<div style="color:rgba(255,255,255,0.4);font-size:12px;">${t.sub}</div>` : ''}
+                    </div>
+                    <label style="position:relative;display:inline-block;width:50px;height:28px;">
+                        <input type="checkbox" ${t.value ? 'checked' : ''} onchange="updateSetting('${t.key}', this.checked)" style="opacity:0;width:0;height:0;">
+                        <span style="position:absolute;cursor:pointer;inset:0;background:${t.value ? '#8B5CF6' : 'rgba(255,255,255,0.2)'};border-radius:14px;transition:0.3s;">
+                            <span style="position:absolute;top:2px;left:${t.value ? '24px' : '2px'};width:24px;height:24px;background:#fff;border-radius:50%;transition:0.3s;"></span>
+                        </span>
+                    </label>
+                </div>
+            `).join('');
+
+            items.innerHTML = html;
+            modal.classList.add('show');
+        }
+
+        async function updateSetting(key, value) {
+            try {
+                await db.collection('chats').doc(chatId).update({
+                    [`settings.${key}`]: value
+                });
+                channelData.settings[key] = value;
+            } catch (e) {
+                alert('Error updating setting: ' + e.message);
+            }
+        }
+
+        // ─── MODAL HELPERS ───────────────────────────────────────────
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        // Close modal on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('show');
+                }
+            });
+        });
+
+        console.log('📢 AURA Chat — Channel Info (HTML)');
+    </script>
+
+</body>
+</html>
