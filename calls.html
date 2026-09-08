@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calls - AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .app {
+            position: relative;
+            z-index: 2;
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ─── HEADER ────────────────────────────────────────────── */
+        .header {
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            flex-shrink: 0;
+        }
+
+        .header .back {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        .header .title {
+            flex: 1;
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        /* ─── USER LIST ──────────────────────────────────────────── */
+        .user-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 16px 80px;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            gap: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .user-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .user-item .avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+            position: relative;
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .user-item .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .user-item .avatar .online-dot {
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid #0A0A0F;
+        }
+
+        .user-item .avatar .online-dot.online { background: #10B981; }
+        .user-item .avatar .online-dot.offline { background: #6B7280; }
+
+        .user-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-item .info .name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .user-item .info .status {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .user-item .info .status.online { color: #10B981; }
+
+        .user-item .actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .user-item .actions button {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .user-item .actions button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .user-item .actions button.video { color: #8B5CF6; }
+        .user-item .actions button.video:hover { background: rgba(139, 92, 246, 0.2); }
+        .user-item .actions button.call { color: #10B981; }
+        .user-item .actions button.call:hover { background: rgba(16, 185, 129, 0.2); }
+
+        /* ─── EMPTY STATE ────────────────────────────────────────── */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 60vh;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            color: rgba(255, 255, 255, 0.06);
+            margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.3);
+            font-weight: 700;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.15);
+            margin-top: 4px;
+        }
+
+        .empty-state .btn {
+            margin-top: 20px;
+            padding: 12px 32px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            border: none;
+            border-radius: 24px;
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: transform 0.2s ease;
+        }
+
+        .empty-state .btn:hover { transform: translateY(-2px); }
+
+        /* ─── LOADER ────────────────────────────────────────────── */
+        .loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 60vh;
+        }
+
+        .loader .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(139, 92, 246, 0.1);
+            border-top-color: #8B5CF6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ─── FAB ────────────────────────────────────────────────── */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fab:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
+        }
+
+        /* ─── MODAL ────────────────────────────────────────────────── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: #1a103c;
+            border-radius: 24px 24px 0 0;
+            padding: 20px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            0% { transform: translateY(100%); }
+            100% { transform: translateY(0); }
+        }
+
+        .modal-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin: 0 auto 16px;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .modal-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .modal-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .modal-item .icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .modal-item .icon.purple { background: rgba(139, 92, 246, 0.2); color: #8B5CF6; }
+        .modal-item .icon.green { background: rgba(16, 185, 129, 0.2); color: #10B981; }
+        .modal-item .icon.orange { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+
+        .modal-item .label {
+            flex: 1;
+            font-size: 15px;
+            color: #fff;
+        }
+
+        .modal-item .label .sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .modal-item .arrow {
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* ─── INCOMING CALL ────────────────────────────────────────── */
+        .incoming-call {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 40px;
+        }
+
+        .incoming-call.show { display: flex; }
+
+        .incoming-call .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-size: 48px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 24px;
+        }
+
+        .incoming-call .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .incoming-call .name {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .incoming-call .call-type {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 8px;
+        }
+
+        .incoming-call .actions {
+            display: flex;
+            gap: 48px;
+            margin-top: 48px;
+        }
+
+        .incoming-call .actions button {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease;
+        }
+
+        .incoming-call .actions button:hover { transform: scale(1.05); }
+        .incoming-call .actions .decline { background: #ef4444; color: #fff; }
+        .incoming-call .actions .accept { background: #10B981; color: #fff; }
+
+        /* ─── OUTGOING CALL ────────────────────────────────────────── */
+        .outgoing-call {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 40px;
+        }
+
+        .outgoing-call.show { display: flex; }
+
+        .outgoing-call .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            font-size: 48px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 24px;
+        }
+
+        .outgoing-call .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .outgoing-call .name {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .outgoing-call .call-type {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 8px;
+        }
+
+        .outgoing-call .pulse-ring {
+            margin: 24px 0;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(139, 92, 246, 0.1);
+            animation: pulse 1.5s ease-in-out infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .outgoing-call .cancel-btn {
+            margin-top: 24px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: none;
+            background: #ef4444;
+            color: #fff;
+            font-size: 28px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .outgoing-call .cancel-btn:hover { transform: scale(1.05); }
+
+        @media (max-width: 640px) {
+            .app { max-width: 100%; }
+            .user-item { padding: 10px 12px; }
+            .user-item .avatar { width: 48px; height: 48px; }
+            .incoming-call .avatar { width: 100px; height: 100px; }
+            .incoming-call .actions { gap: 32px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="app" id="app">
+
+        <!-- ─── HEADER ────────────────────────────────────────────── -->
+        <div class="header">
+            <button class="back" onclick="window.history.back()">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="title">New Call</div>
+        </div>
+
+        <!-- ─── USER LIST ──────────────────────────────────────────── -->
+        <div class="user-list" id="userList">
+            <div class="loader">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ─── FAB ────────────────────────────────────────────────────── -->
+    <button class="fab" onclick="showCallOptions()">
+        <i class="fas fa-phone"></i>
+    </button>
+
+    <!-- ─── CALL OPTIONS MODAL ────────────────────────────────────── -->
+    <div class="modal-overlay" id="callOptionsModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title">Call Options</div>
+            <div class="modal-item" onclick="closeModal('callOptionsModal');showCallCode()">
+                <div class="icon purple"><i class="fas fa-hashtag"></i></div>
+                <div class="label">Join by Code</div>
+                <span class="arrow"><i class="fas fa-chevron-right"></i></span>
+            </div>
+            <div class="modal-item" onclick="closeModal('callOptionsModal');startGroupCall(false)">
+                <div class="icon green"><i class="fas fa-phone"></i></div>
+                <div class="label">Start Voice Call</div>
+                <span class="arrow"><i class="fas fa-chevron-right"></i></span>
+            </div>
+            <div class="modal-item" onclick="closeModal('callOptionsModal');startGroupCall(true)">
+                <div class="icon purple"><i class="fas fa-video"></i></div>
+                <div class="label">Start Video Call</div>
+                <span class="arrow"><i class="fas fa-chevron-right"></i></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── INCOMING CALL ──────────────────────────────────────────── -->
+    <div class="incoming-call" id="incomingCall">
+        <div class="avatar" id="incomingAvatar">
+            <i class="fas fa-user"></i>
+        </div>
+        <div class="name" id="incomingName">Unknown</div>
+        <div class="call-type" id="incomingType">Incoming video call...</div>
+        <div class="actions">
+            <button class="decline" onclick="declineCall()">
+                <i class="fas fa-phone-slash"></i>
+            </button>
+            <button class="accept" onclick="acceptCall()">
+                <i class="fas fa-phone"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ─── OUTGOING CALL ──────────────────────────────────────────── -->
+    <div class="outgoing-call" id="outgoingCall">
+        <div class="avatar" id="outgoingAvatar">
+            <i class="fas fa-user"></i>
+        </div>
+        <div class="name" id="outgoingName">Unknown</div>
+        <div class="call-type" id="outgoingType">Calling...</div>
+        <div class="pulse-ring">
+            <i class="fas fa-phone" style="color:#8B5CF6;font-size:32px;"></i>
+        </div>
+        <button class="cancel-btn" onclick="cancelOutgoingCall()">
+            <i class="fas fa-phone-slash"></i>
+        </button>
+    </div>
+
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
+            authDomain: "aurachat-85f54.firebaseapp.com",
+            projectId: "aurachat-85f54",
+            storageBucket: "aurachat-85f54.firebasestorage.app",
+            messagingSenderId: "539789121540",
+            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // ─── LOCAL STORAGE HELPERS ────────────────────────────────────
+        function getLocal(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+
+        // ─── DOM REFS ──────────────────────────────────────────────────
+        const userList = document.getElementById('userList');
+        const incomingCall = document.getElementById('incomingCall');
+        const outgoingCall = document.getElementById('outgoingCall');
+        const incomingName = document.getElementById('incomingName');
+        const incomingType = document.getElementById('incomingType');
+        const incomingAvatar = document.getElementById('incomingAvatar');
+        const outgoingName = document.getElementById('outgoingName');
+        const outgoingType = document.getElementById('outgoingType');
+        const outgoingAvatar = document.getElementById('outgoingAvatar');
+
+        // ─── STATE ─────────────────────────────────────────────────────
+        let userId = '';
+        let users = [];
+        let isLoading = true;
+        let outgoingTimer = null;
+        let callTimeout = null;
+
+        // ─── AUTH ──────────────────────────────────────────────────────
+        function getUserId() {
+            const user = auth.currentUser;
+            if (user) return user.uid;
+            return getLocal('mock_user_id') || null;
+        }
+
+        auth.onAuthStateChanged(function(user) {
+            const id = getUserId();
+            if (id) {
+                userId = id;
+                console.log('✅ User found:', userId);
+                loadUsers();
+            } else {
+                userList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-slash"></i>
+                        <h3>Not signed in</h3>
+                        <p>Please sign in to make calls</p>
+                        <button class="btn" onclick="window.location.href='/onboarding.html'">Get Started</button>
+                    </div>
+                `;
+                isLoading = false;
+            }
+        });
+
+        // ─── LOAD USERS ───────────────────────────────────────────────
+        async function loadUsers() {
+            if (!userId) return;
+
+            userList.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+
+            try {
+                // Get all chats
+                const chatsSnapshot = await db.collection('chats')
+                    .where('participants', 'array-contains', userId)
+                    .get();
+
+                const chatUserIds = new Set();
+                for (const chat of chatsSnapshot.docs) {
+                    const participants = chat.data().participants || [];
+                    participants.forEach(pid => {
+                        if (pid !== userId) chatUserIds.add(pid);
+                    });
+                }
+
+                if (chatUserIds.size === 0) {
+                    userList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-users"></i>
+                            <h3>No contacts yet</h3>
+                            <p>Start a chat first to call someone</p>
+                            <button class="btn" onclick="window.location.href='/global_search.html'">Find People</button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Fetch user profiles
+                const ids = Array.from(chatUserIds);
+                const usersData = [];
+                for (let i = 0; i < ids.length; i += 10) {
+                    const batch = ids.slice(i, i + 10);
+                    const snapshot = await db.collection('users')
+                        .where(FieldPath.documentId, 'in', batch)
+                        .get();
+
+                    snapshot.docs.forEach(doc => {
+                        const data = doc.data();
+                        usersData.push({
+                            id: doc.id,
+                            username: data.username || data.display_name || 'Unknown',
+                            avatar_url: data.avatar_url || null,
+                            status: data.status || 'offline',
+                            bio: data.bio || ''
+                        });
+                    });
+                }
+
+                users = usersData;
+                isLoading = false;
+                renderUsers();
+
+            } catch (e) {
+                console.error('Load users error:', e);
+                userList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <h3>Error loading users</h3>
+                        <p>${e.message}</p>
+                        <button class="btn" onclick="loadUsers()">Try Again</button>
+                    </div>
+                `;
+            }
+        }
+
+        // ─── RENDER USERS ─────────────────────────────────────────────
+        function renderUsers() {
+            if (users.length === 0) {
+                userList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <h3>No contacts yet</h3>
+                        <p>Start a chat first to call someone</p>
+                        <button class="btn" onclick="window.location.href='/global_search.html'">Find People</button>
+                    </div>
+                `;
+                return;
+            }
+
+            userList.innerHTML = users.map(user => {
+                const isOnline = user.status === 'online';
+                const name = user.username || 'Unknown';
+                const initial = name.charAt(0).toUpperCase();
+
+                return `
+                    <div class="user-item" onclick="viewProfile('${user.id}')">
+                        <div class="avatar">
+                            ${user.avatar_url ? `<img src="${user.avatar_url}" />` : initial}
+                            <div class="online-dot ${isOnline ? 'online' : 'offline'}"></div>
+                        </div>
+                        <div class="info">
+                            <div class="name">${name}</div>
+                            <div class="status ${isOnline ? 'online' : ''}">${isOnline ? 'Online' : 'Offline'}</div>
+                        </div>
+                        <div class="actions">
+                            <button class="video" onclick="event.stopPropagation();startCall('${user.id}','${name}','${user.avatar_url || ''}',true)">
+                                <i class="fas fa-video"></i>
+                            </button>
+                            <button class="call" onclick="event.stopPropagation();startCall('${user.id}','${name}','${user.avatar_url || ''}',false)">
+                                <i class="fas fa-phone"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ─── START CALL ───────────────────────────────────────────────
+        function startCall(targetId, targetName, targetAvatar, isVideo) {
+            // Show outgoing call UI
+            outgoingName.textContent = targetName;
+            outgoingType.textContent = isVideo ? 'Video calling...' : 'Voice calling...';
+            if (targetAvatar) {
+                outgoingAvatar.innerHTML = `<img src="${targetAvatar}" />`;
+            } else {
+                outgoingAvatar.innerHTML = `<i class="fas fa-user"></i>`;
+            }
+            outgoingCall.classList.add('show');
+
+            // Simulate call connection
+            callTimeout = setTimeout(() => {
+                // Check if call was answered
+                // For demo, simulate answer after 3 seconds
+                setTimeout(() => {
+                    if (outgoingCall.classList.contains('show')) {
+                        // Simulate call connected
+                        alert('Call connected! (Demo)');
+                        outgoingCall.classList.remove('show');
+                    }
+                }, 2000);
+            }, 10000);
+
+            // Simulate ringing
+            console.log(`📞 Calling ${targetName}...`);
+        }
+
+        // ─── CANCEL OUTGOING CALL ────────────────────────────────────
+        function cancelOutgoingCall() {
+            if (callTimeout) {
+                clearTimeout(callTimeout);
+                callTimeout = null;
+            }
+            if (outgoingTimer) {
+                clearInterval(outgoingTimer);
+                outgoingTimer = null;
+            }
+            outgoingCall.classList.remove('show');
+            alert('Call cancelled');
+        }
+
+        // ─── SHOW CALL OPTIONS ──────────────────────────────────────
+        function showCallOptions() {
+            document.getElementById('callOptionsModal').classList.add('show');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        // ─── JOIN BY CODE ─────────────────────────────────────────────
+        function showCallCode() {
+            const code = prompt('Enter call code:');
+            if (code && code.trim()) {
+                alert(`Joining call: ${code.trim()} (Demo)`);
+            }
+        }
+
+        // ─── START GROUP CALL ─────────────────────────────────────────
+        function startGroupCall(isVideo) {
+            const code = 'GRP_' + Math.random().toString(36).substring(2, 8).toUpperCase();
+            alert(`${isVideo ? 'Video' : 'Voice'} group call started!\nCode: ${code}`);
+        }
+
+        // ─── VIEW PROFILE ─────────────────────────────────────────────
+        function viewProfile(userId) {
+            alert('View profile: ' + userId);
+        }
+
+        // ─── INCOMING CALL (SIMULATED) ──────────────────────────────
+        function showIncomingCall(callerName, callerAvatar, isVideo) {
+            incomingName.textContent = callerName || 'Unknown';
+            incomingType.textContent = isVideo ? 'Incoming video call...' : 'Incoming voice call...';
+            if (callerAvatar) {
+                incomingAvatar.innerHTML = `<img src="${callerAvatar}" />`;
+            } else {
+                incomingAvatar.innerHTML = `<i class="fas fa-user"></i>`;
+            }
+            incomingCall.classList.add('show');
+        }
+
+        function acceptCall() {
+            incomingCall.classList.remove('show');
+            alert('Call accepted!');
+        }
+
+        function declineCall() {
+            incomingCall.classList.remove('show');
+            alert('Call declined');
+        }
+
+        // ─── SIMULATE INCOMING CALL (DEMO) ──────────────────────────
+        // Uncomment to test incoming call UI
+        // setTimeout(() => {
+        //     showIncomingCall('John Doe', null, true);
+        // }, 5000);
+
+        console.log('📞 AURA Chat — Calls Screen');
+    </script>
+
+</body>
+</html>
