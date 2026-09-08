@@ -11,7 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    
+
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -286,6 +286,9 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
+        // ─── BACKEND URL ──────────────────────────────────────────────
+        const BACKEND_URL = 'https://aurachat-backend-5utu.onrender.com';
+
         // ─── DOM REFS ──────────────────────────────────────────────────
         const emailInput = document.getElementById('emailInput');
         const codeInputs = [0,1,2,3,4,5].map(i => document.getElementById('code' + i));
@@ -300,19 +303,13 @@
         const backBtn = document.getElementById('backBtn');
         const pageTitle = document.getElementById('pageTitle');
         const pageSubtitle = document.getElementById('pageSubtitle');
-        const termsLink = document.getElementById('termsLink');
 
         // ─── STATE ─────────────────────────────────────────────────────
         let codeSent = false;
         let isLoading = false;
         let sentEmail = '';
-        let userId = '';
-        let isExistingUser = false;
-        let existingUserData = null;
+        let tempUserId = '';
         let resendCountdown = 0;
-        let resendLoading = false;
-
-        const BACKEND_URL = 'https://aurachat-backend-5utu.onrender.com';
 
         // ─── HELPERS ──────────────────────────────────────────────────
         function showError(msg) {
@@ -327,17 +324,6 @@
             isLoading = loading;
             mainBtn.disabled = loading;
             mainBtn.innerHTML = loading ? '<span class="spinner"></span>' : (codeSent ? 'Verify Code' : 'Continue');
-        }
-
-        function setResendLoading(loading) {
-            resendLoading = loading;
-            if (loading) {
-                resendBtn.innerHTML = '<span class="small-spinner"></span>';
-                resendBtn.disabled = true;
-            } else {
-                resendBtn.textContent = 'Resend Code';
-                resendBtn.disabled = false;
-            }
         }
 
         function startResendTimer() {
@@ -359,7 +345,7 @@
             setTimeout(tickResendTimer, 1000);
         }
 
-        // ─── STEP 1: SEND CODE ──────────────────────────────────────
+        // ─── STEP 1: SEND CODE & CREATE USER ────────────────────────
         async function sendCode() {
             const email = emailInput.value.trim().toLowerCase();
 
@@ -372,67 +358,79 @@
             setLoading(true);
 
             try {
-                // Check Firestore for existing user
-                const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
-
-                let isExisting = false;
-                let existingData = null;
-                let userIdTemp;
-
-                if (!snapshot.empty) {
-                    isExisting = true;
-                    existingData = snapshot.docs[0].data();
-                    existingData.id = snapshot.docs[0].id;
-                    userIdTemp = snapshot.docs[0].id;
-                } else {
-                    userIdTemp = 'mock_' + Date.now();
+                // ─── CREATE USER IN FIREBASE ──────────────────────────
+                // Generate a temporary password
+                const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+                
+                let userCredential;
+                try {
+                    // Try to create user
+                    userCredential = await auth.createUserWithEmailAndPassword(email, tempPassword);
+                    console.log('✅ User created:', userCredential.user.uid);
+                } catch (authError) {
+                    if (authError.code === 'auth/email-already-in-use') {
+                        // User exists - try to sign in
+                        try {
+                            // Check if user has profile
+                            const userDoc = await db.collection('users').doc(email).get();
+                            if (userDoc.exists) {
+                                // Already has profile - redirect to chats
+                                window.location.href = '/chats.html';
+                                return;
+                            }
+                            // Send OTP for existing user
+                            await sendOtp(email, 'existing');
+                            return;
+                        } catch (signInError) {
+                            showError('Account exists but login failed. Please try again.');
+                            setLoading(false);
+                            return;
+                        }
+                    } else {
+                        throw authError;
+                    }
                 }
 
-                // Save to localStorage
-                localStorage.setItem('pending_email_user_id', userIdTemp);
-                localStorage.setItem('pending_email', email);
-                if (existingData) {
-                    localStorage.setItem('pending_phone', existingData.phone || '');
-                    localStorage.setItem('pending_username', existingData.username || '');
-                    localStorage.setItem('pending_display_name', existingData.display_name || '');
-                    localStorage.setItem('pending_bio', existingData.bio || '');
-                    localStorage.setItem('pending_avatar', existingData.avatar_url || '');
-                }
-
-                // Call backend to send OTP
-                const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, userId: userIdTemp })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    // Switch to code view
-                    codeSent = true;
-                    sentEmail = email;
-                    userId = userIdTemp;
-                    isExistingUser = isExisting;
-                    existingUserData = existingData;
-
-                    emailGroup.style.display = 'none';
-                    codeGroup.style.display = 'flex';
-                    resendArea.style.display = 'block';
-                    pageTitle.textContent = 'Verify Email';
-                    pageSubtitle.textContent = `Enter the 6-digit code sent to ${email}`;
-                    mainBtn.textContent = 'Verify Code';
-                    setLoading(false);
-
-                    codeInputs[0].focus();
-                    startResendTimer();
-                } else {
-                    showError(data.details || data.error || 'Failed to send OTP');
-                    setLoading(false);
-                }
+                // ─── SEND OTP ──────────────────────────────────────────
+                await sendOtp(email, 'new', userCredential.user.uid);
 
             } catch (e) {
-                showError('Network error: ' + e.message);
+                console.error('Send code error:', e);
+                showError('Failed to send code: ' + e.message);
+                setLoading(false);
+            }
+        }
+
+        async function sendOtp(email, userType, uid) {
+            // Call backend to send OTP
+            const userId = uid || 'temp_' + Date.now();
+
+            const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, userId })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Switch to code view
+                codeSent = true;
+                sentEmail = email;
+                tempUserId = userId;
+
+                emailGroup.style.display = 'none';
+                codeGroup.style.display = 'flex';
+                resendArea.style.display = 'block';
+                pageTitle.textContent = 'Verify Email';
+                pageSubtitle.textContent = `Enter the 6-digit code sent to ${email}`;
+                mainBtn.textContent = 'Verify Code';
+                setLoading(false);
+
+                codeInputs[0].focus();
+                startResendTimer();
+            } else {
+                showError(data.details || data.error || 'Failed to send OTP');
                 setLoading(false);
             }
         }
@@ -453,7 +451,7 @@
                 const response = await fetch(BACKEND_URL + '/api/auth/verify-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, code })
+                    body: JSON.stringify({ userId: tempUserId, code })
                 });
 
                 const data = await response.json();
@@ -466,38 +464,29 @@
                     return;
                 }
 
-                // ─── BACKEND CONFIRMED ──────────────────────────────────
-                // Save to localStorage (like SharedPreferences)
-                localStorage.setItem('mock_user_id', userId);
-                localStorage.setItem('mock_email', sentEmail);
+                // ─── CODE VERIFIED ✅ ──────────────────────────────────
+                // User is already logged in (we created account earlier)
+                // Or if existing user, they're already logged in
 
-                if (isExistingUser && existingUserData) {
-                    localStorage.setItem('mock_phone', existingUserData.phone || '');
-                    localStorage.setItem('mock_username', existingUserData.username || '');
-                    localStorage.setItem('mock_display_name', existingUserData.display_name || '');
-                    localStorage.setItem('mock_bio', existingUserData.bio || '');
-                    localStorage.setItem('mock_avatar', existingUserData.avatar_url || '');
-
-                    // Update Firestore
-                    await db.collection('users').doc(userId).update({
-                        email_verified: true,
-                        updated_at: new Date().toISOString()
-                    });
+                // Check if user has profile
+                const user = auth.currentUser;
+                if (user) {
+                    const userDoc = await db.collection('users').doc(user.uid).get();
+                    if (userDoc.exists) {
+                        const data = userDoc.data();
+                        if (data?.username && data?.display_name) {
+                            // Has full profile → go to chats
+                            window.location.href = '/chats.html';
+                            return;
+                        }
+                    }
                 }
 
-                // Clean up pending
-                localStorage.removeItem('pending_email_user_id');
-                localStorage.removeItem('pending_email');
-                localStorage.removeItem('pending_phone');
-                localStorage.removeItem('pending_username');
-                localStorage.removeItem('pending_display_name');
-                localStorage.removeItem('pending_bio');
-                localStorage.removeItem('pending_avatar');
-
-                // Redirect to setup profile
+                // No profile → go to setup
                 window.location.href = '/setup_profile.html';
 
             } catch (e) {
+                console.error('Verify error:', e);
                 showError('Network error: ' + e.message);
                 setLoading(false);
             }
@@ -505,23 +494,23 @@
 
         // ─── RESEND CODE ─────────────────────────────────────────────
         async function resendCode() {
-            if (resendCountdown > 0 || !sentEmail || !userId) return;
+            if (resendCountdown > 0 || !sentEmail) return;
 
             hideError();
-            setResendLoading(true);
+            setLoading(true);
 
             try {
                 const response = await fetch(BACKEND_URL + '/api/auth/send-email-verification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: sentEmail, userId })
+                    body: JSON.stringify({ email: sentEmail, userId: tempUserId })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
                     startResendTimer();
-                    // Show success snackbar
+                    // Show success
                     const snackbar = document.createElement('div');
                     snackbar.style.cssText = `
                         position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -539,7 +528,7 @@
                 showError('Network error: ' + e.message);
             }
 
-            setResendLoading(false);
+            setLoading(false);
         }
 
         // ─── EVENT LISTENERS ─────────────────────────────────────────
@@ -570,12 +559,6 @@
             hideError();
         });
 
-        // Terms link
-        termsLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = '/terms.html';
-        });
-
         // ─── CODE INPUT AUTO-FOCUS ──────────────────────────────────
         codeInputs.forEach((input, index) => {
             input.addEventListener('input', function() {
@@ -594,7 +577,6 @@
                 }
             });
 
-            // Restrict to numbers only
             input.addEventListener('keypress', function(e) {
                 if (!/^[0-9]$/.test(e.key)) e.preventDefault();
             });
@@ -618,11 +600,14 @@
                             window.location.href = '/setup_profile.html';
                         }
                     }
-                }).catch(() => {});
+                }).catch(() => {
+                    // If error, go to setup
+                    window.location.href = '/setup_profile.html';
+                });
             }
         });
 
-        console.log('📧 AURA Chat — Email Verification Screen (HTML)');
+        console.log('📧 AURA Chat — Email Verification (Fixed)');
     </script>
 
 </body>
