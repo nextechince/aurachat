@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Setup Profile - AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .container {
+            position: relative;
+            z-index: 2;
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px 0 40px;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─── HEADER ────────────────────────────────────────────── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+
+        .skip-btn {
+            padding: 8px 16px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            color: #8B5CF6;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .skip-btn:hover {
+            background: rgba(139, 92, 246, 0.25);
+        }
+
+        .complete-banner {
+            display: none;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 24px;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .complete-banner.show { display: flex; }
+        .complete-banner i { color: #10B981; font-size: 20px; }
+        .complete-banner p {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0;
+        }
+
+        /* ─── AVATAR ────────────────────────────────────────────── */
+        .avatar-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .avatar:hover { transform: scale(1.05); }
+
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .avatar .placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .avatar-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 8px;
+            cursor: pointer;
+        }
+
+        .avatar-label:hover { color: rgba(255, 255, 255, 0.6); }
+
+        /* ─── INPUTS ────────────────────────────────────────────── */
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 8px;
+        }
+
+        .input-group .input-wrap {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            transition: border 0.3s ease;
+            overflow: hidden;
+        }
+
+        .input-group .input-wrap:focus-within {
+            border-color: #8B5CF6;
+        }
+
+        .input-group .input-wrap.error {
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        .input-group .input-wrap .prefix {
+            padding-left: 16px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .input-group .input-wrap i {
+            padding: 0 14px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 18px;
+        }
+
+        .input-group input,
+        .input-group textarea {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 18px 16px;
+            color: #fff;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            resize: none;
+            min-height: 56px;
+        }
+
+        .input-group input::placeholder,
+        .input-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        .input-group textarea { min-height: 80px; }
+
+        .input-error {
+            font-size: 13px;
+            color: #ef4444;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .input-error.show { display: block; }
+
+        /* ─── VERIFICATION BANNER ────────────────────────────────── */
+        .verification-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            margin-bottom: 32px;
+        }
+
+        .verification-banner .icon {
+            padding: 8px;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 50%;
+            color: #8B5CF6;
+            font-size: 18px;
+        }
+
+        .verification-banner .text h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .verification-banner .text p {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.4);
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        /* ─── BUTTONS ────────────────────────────────────────────── */
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .btn {
+            flex: 1;
+            height: 56px;
+            border: none;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.35);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-full {
+            flex: none;
+            width: 100%;
+        }
+
+        .btn .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ─── RESPONSIVE ──────────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .container { padding: 10px 0 30px; }
+            .title { font-size: 28px; }
+            .header { flex-wrap: wrap; gap: 12px; }
+            .btn-group { flex-direction: column; }
+            .avatar { width: 100px; height: 100px; }
+        }
+
+        @media (max-width: 400px) {
+            .title { font-size: 24px; }
+            .container { padding: 0 4px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="container" id="app">
+
+        <!-- ─── HEADER ────────────────────────────────────────────── -->
+        <div class="header">
+            <div>
+                <div class="title" id="pageTitle">Setup Profile</div>
+                <div class="subtitle" id="pageSubtitle">Complete your profile to get started</div>
+            </div>
+            <button class="skip-btn" id="skipBtn" style="display:none;">
+                Proceed <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+
+        <!-- ─── COMPLETE BANNER ───────────────────────────────────── -->
+        <div class="complete-banner" id="completeBanner">
+            <i class="fas fa-check-circle"></i>
+            <p>Your profile is complete! You can proceed to the app or make changes below.</p>
+        </div>
+
+        <!-- ─── AVATAR ────────────────────────────────────────────── -->
+        <div class="avatar-wrapper">
+            <div class="avatar" id="avatar" onclick="openImagePicker()">
+                <img id="avatarImg" style="display:none;" />
+                <div class="placeholder" id="avatarPlaceholder">
+                    <i class="fas fa-user"></i>
+                </div>
+            </div>
+            <span class="avatar-label" onclick="openImagePicker()">
+                <i class="fas fa-camera"></i> Tap to add photo
+            </span>
+        </div>
+
+        <!-- ─── DISPLAY NAME ───────────────────────────────────────── -->
+        <div class="input-group">
+            <label>Display Name</label>
+            <div class="input-wrap">
+                <i class="fas fa-user"></i>
+                <input type="text" id="displayName" placeholder="Your display name" />
+            </div>
+        </div>
+
+        <!-- ─── USERNAME ───────────────────────────────────────────── -->
+        <div class="input-group">
+            <label>Username</label>
+            <div class="input-wrap" id="usernameWrap">
+                <span class="prefix">@</span>
+                <input type="text" id="username" placeholder="username" />
+            </div>
+            <div class="input-error" id="usernameError">Username is invalid</div>
+        </div>
+
+        <!-- ─── BIO ────────────────────────────────────────────────── -->
+        <div class="input-group">
+            <label>Bio</label>
+            <div class="input-wrap">
+                <i class="fas fa-edit"></i>
+                <textarea id="bio" placeholder="Tell us about yourself..." rows="3"></textarea>
+            </div>
+        </div>
+
+        <!-- ─── VERIFICATION BANNER ───────────────────────────────── -->
+        <div class="verification-banner">
+            <div class="icon"><i class="fas fa-check-circle"></i></div>
+            <div class="text">
+                <h4>Verification</h4>
+                <p>Your account will be verified once you complete your profile</p>
+            </div>
+        </div>
+
+        <!-- ─── BUTTONS ────────────────────────────────────────────── -->
+        <div id="btnGroup" class="btn-group">
+            <button class="btn btn-primary btn-full" id="mainBtn">
+                Complete Setup
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
+            authDomain: "aurachat-85f54.firebaseapp.com",
+            projectId: "aurachat-85f54",
+            storageBucket: "aurachat-85f54.firebasestorage.app",
+            messagingSenderId: "539789121540",
+            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+
+        // ─── DOM REFS ──────────────────────────────────────────────────
+        const pageTitle = document.getElementById('pageTitle');
+        const pageSubtitle = document.getElementById('pageSubtitle');
+        const skipBtn = document.getElementById('skipBtn');
+        const completeBanner = document.getElementById('completeBanner');
+        const avatar = document.getElementById('avatar');
+        const avatarImg = document.getElementById('avatarImg');
+        const avatarPlaceholder = document.getElementById('avatarPlaceholder');
+        const displayName = document.getElementById('displayName');
+        const username = document.getElementById('username');
+        const usernameWrap = document.getElementById('usernameWrap');
+        const usernameError = document.getElementById('usernameError');
+        const bio = document.getElementById('bio');
+        const mainBtn = document.getElementById('mainBtn');
+        const btnGroup = document.getElementById('btnGroup');
+
+        // ─── STATE ─────────────────────────────────────────────────────
+        let isLoading = false;
+        let profileImage = null; // File object
+        let isExistingUser = false;
+        let hasCompleteProfile = false;
+        let existingUsername = '';
+        let existingAvatarUrl = '';
+        let userId = '';
+
+        // ─── LOAD EXISTING PROFILE ──────────────────────────────────
+        async function loadExistingProfile() {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            userId = user.uid;
+
+            try {
+                const doc = await db.collection('users').doc(userId).get();
+
+                if (doc.exists) {
+                    const data = doc.data();
+                    const usernameVal = data?.username || '';
+                    const displayNameVal = data?.display_name || '';
+                    const bioVal = data?.bio || '';
+                    const avatarUrl = data?.avatar_url || '';
+
+                    isExistingUser = true;
+                    hasCompleteProfile = usernameVal.length > 0 && displayNameVal.length > 0;
+                    existingUsername = usernameVal;
+                    existingAvatarUrl = avatarUrl;
+
+                    // Fill form
+                    document.getElementById('displayName').value = displayNameVal;
+                    document.getElementById('username').value = usernameVal;
+                    document.getElementById('bio').value = bioVal || '';
+
+                    // Show avatar
+                    if (avatarUrl) {
+                        avatarImg.src = avatarUrl;
+                        avatarImg.style.display = 'block';
+                        avatarPlaceholder.style.display = 'none';
+                    }
+
+                    // Update UI
+                    if (hasCompleteProfile) {
+                        pageTitle.textContent = 'Your Profile';
+                        pageSubtitle.textContent = 'Review or update your profile info';
+                        completeBanner.classList.add('show');
+                        skipBtn.style.display = 'flex';
+                        mainBtn.textContent = 'Update Profile';
+                        
+                        // Two buttons
+                        btnGroup.innerHTML = `
+                            <button class="btn btn-secondary" id="skipToAppBtn">Proceed to App</button>
+                            <button class="btn btn-primary" id="updateBtn">Update Profile</button>
+                        `;
+                        document.getElementById('skipToAppBtn').addEventListener('click', proceedToApp);
+                        document.getElementById('updateBtn').addEventListener('click', completeSetup);
+                    }
+                }
+            } catch (e) {
+                console.error('Load profile error:', e);
+            }
+        }
+
+        // ─── PROCEED TO APP ──────────────────────────────────────────
+        function proceedToApp() {
+            window.location.href = '/chats.html';
+        }
+
+        // ─── VALIDATE USERNAME ──────────────────────────────────────
+        function validateUsername(value) {
+            if (!value || value.length === 0) {
+                usernameError.classList.remove('show');
+                usernameWrap.classList.remove('error');
+                return true;
+            }
+            if (value.length < 3) {
+                usernameError.textContent = 'Username must be at least 3 characters';
+                usernameError.classList.add('show');
+                usernameWrap.classList.add('error');
+                return false;
+            }
+            if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+                usernameError.textContent = 'Only letters, numbers, and underscores allowed';
+                usernameError.classList.add('show');
+                usernameWrap.classList.add('error');
+                return false;
+            }
+            usernameError.classList.remove('show');
+            usernameWrap.classList.remove('error');
+            return true;
+        }
+
+        username.addEventListener('input', function() {
+            validateUsername(this.value);
+        });
+
+        // ─── OPEN IMAGE PICKER ──────────────────────────────────────
+        function openImagePicker() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    profileImage = file;
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        avatarImg.src = ev.target.result;
+                        avatarImg.style.display = 'block';
+                        avatarPlaceholder.style.display = 'none';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            input.click();
+        }
+
+        // ─── UPLOAD PROFILE IMAGE ──────────────────────────────────
+        async function uploadProfileImage(userId) {
+            if (!profileImage) return null;
+
+            // ── DELETE OLD AVATAR ──
+            try {
+                const doc = await db.collection('users').doc(userId).get();
+                const currentAvatarUrl = doc.data()?.avatar_url;
+                if (currentAvatarUrl) {
+                    // Try to delete from storage
+                    try {
+                        const ref = storage.refFromURL(currentAvatarUrl);
+                        await ref.delete();
+                    } catch (e) {
+                        console.log('Could not delete old avatar:', e);
+                    }
+                }
+            } catch (e) {
+                console.log('Delete old avatar error:', e);
+            }
+
+            // ── UPLOAD NEW ──
+            const storageRef = storage.ref().child(`profile_pictures/${userId}/${Date.now()}.jpg`);
+            const snapshot = await storageRef.put(profileImage);
+            const downloadUrl = await snapshot.ref.getDownloadURL();
+
+            // Update Firestore
+            await db.collection('users').doc(userId).set({
+                avatar_url: downloadUrl,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            return downloadUrl;
+        }
+
+        // ─── CHECK USERNAME TAKEN ──────────────────────────────────
+        async function isUsernameTaken(usernameVal) {
+            if (isExistingUser && existingUsername === usernameVal) return false;
+            
+            const snapshot = await db.collection('users')
+                .where('username', '==', usernameVal)
+                .limit(1)
+                .get();
+            return !snapshot.empty;
+        }
+
+        // ─── COMPLETE SETUP ──────────────────────────────────────────
+        async function completeSetup() {
+            const name = displayName.value.trim();
+            const usernameVal = username.value.trim();
+            const bioVal = bio.value.trim();
+
+            if (!name) {
+                showError('Please enter your display name');
+                return;
+            }
+
+            if (!validateUsername(usernameVal)) {
+                showError('Please enter a valid username');
+                return;
+            }
+
+            isLoading = true;
+            setLoading(true);
+
+            try {
+                const user = auth.currentUser;
+                if (!user) throw new Error('Not authenticated');
+
+                // Check username taken
+                const taken = await isUsernameTaken(usernameVal);
+                if (taken) {
+                    usernameError.textContent = 'Username already taken';
+                    usernameError.classList.add('show');
+                    usernameWrap.classList.add('error');
+                    setLoading(false);
+                    isLoading = false;
+                    return;
+                }
+
+                // Upload image
+                let photoUrl = null;
+                if (profileImage) {
+                    photoUrl = await uploadProfileImage(user.uid);
+                    if (!photoUrl) {
+                        showError('Profile image upload failed');
+                        setLoading(false);
+                        isLoading = false;
+                        return;
+                    }
+                }
+
+                // Save profile
+                await db.collection('users').doc(user.uid).set({
+                    username: usernameVal,
+                    display_name: name,
+                    bio: bioVal || '',
+                    email: user.email || '',
+                    email_verified: true,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                // Save to localStorage
+                localStorage.setItem('aura_user', user.uid);
+                localStorage.setItem('aura_username', usernameVal);
+                localStorage.setItem('aura_display_name', name);
+                localStorage.setItem('aura_has_profile', 'true');
+
+                // Redirect to chats
+                window.location.href = '/chats.html';
+
+            } catch (e) {
+                console.error('Setup error:', e);
+                showError('Error: ' + e.message);
+                setLoading(false);
+                isLoading = false;
+            }
+        }
+
+        // ─── HELPERS ──────────────────────────────────────────────────
+        function setLoading(loading) {
+            isLoading = loading;
+            const btns = document.querySelectorAll('.btn');
+            btns.forEach(btn => {
+                btn.disabled = loading;
+                if (loading) {
+                    btn.innerHTML = '<span class="spinner"></span>';
+                } else {
+                    btn.textContent = btn.dataset.originalText || 'Complete Setup';
+                }
+            });
+        }
+
+        function showError(msg) {
+            const el = document.createElement('div');
+            el.style.cssText = `
+                position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                background: rgba(239,68,68,0.9); color: white; padding: 14px 24px;
+                border-radius: 12px; font-weight: 600; z-index: 999; max-width: 90%;
+                box-shadow: 0 8px 32px rgba(239,68,68,0.3);
+                animation: fadeIn 0.3s ease;
+            `;
+            el.textContent = msg;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 4000);
+        }
+
+        // ─── SETUP BUTTONS ──────────────────────────────────────────
+        function setupButtons() {
+            // If we already created the buttons (existing user), handle skip button
+            if (hasCompleteProfile) {
+                // Buttons are already in DOM from loadExistingProfile
+                return;
+            }
+
+            // Single button for new users
+            mainBtn.textContent = 'Complete Setup';
+            mainBtn.dataset.originalText = 'Complete Setup';
+            mainBtn.addEventListener('click', completeSetup);
+        }
+
+        // ─── INIT ─────────────────────────────────────────────────────
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                userId = user.uid;
+                loadExistingProfile().then(() => {
+                    setupButtons();
+                });
+            } else {
+                // Not logged in - go to login
+                window.location.href = '/email_verification.html';
+            }
+        });
+
+        // Check localStorage for existing session
+        const storedUser = localStorage.getItem('aura_user');
+        if (storedUser && !auth.currentUser) {
+            // Try to sign in with stored user (handle mock users)
+            // For now, just redirect to email verification
+            window.location.href = '/email_verification.html';
+        }
+
+        console.log('👤 AURA Chat — Setup Profile Screen (HTML)');
+    </script>
+
+</body>
+</html>
