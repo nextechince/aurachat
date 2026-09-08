@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AURA Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0A0A0F;
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+                #0A0A0F;
+        }
+
+        .app {
+            position: relative;
+            z-index: 2;
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ─── HEADER ────────────────────────────────────────────── */
+        .header {
+            padding: 60px 20px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .header-actions button {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 12px;
+            transition: background 0.3s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .header-actions button:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* ─── TABS ────────────────────────────────────────────────── */
+        .tabs {
+            display: flex;
+            padding: 0 20px 12px;
+            gap: 8px;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
+            position: sticky;
+            top: 88px;
+            z-index: 9;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px 0;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            background: none;
+            border: none;
+            font-family: 'Inter', sans-serif;
+            position: relative;
+        }
+
+        .tab.active {
+            color: #fff;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+        }
+
+        .tab:hover:not(.active) {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* ─── CHAT LIST ──────────────────────────────────────────── */
+        .chat-list {
+            flex: 1;
+            padding: 8px 16px 80px;
+            overflow-y: auto;
+        }
+
+        .chat-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            gap: 14px;
+        }
+
+        .chat-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .chat-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: #1a103c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #8B5CF6;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chat-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .chat-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chat-info .name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chat-info .name .badge {
+            font-size: 8px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .chat-info .name .badge.group {
+            background: rgba(6, 182, 212, 0.2);
+            color: #06B6D4;
+        }
+
+        .chat-info .name .badge.channel {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8B5CF6;
+        }
+
+        .chat-info .last-msg {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-meta {
+            text-align: right;
+            flex-shrink: 0;
+            margin-left: 8px;
+        }
+
+        .chat-meta .time {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-meta .unread {
+            margin-top: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            font-size: 11px;
+            font-weight: 600;
+            color: #fff;
+            display: inline-block;
+        }
+
+        /* ─── EMPTY STATE ────────────────────────────────────────── */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 60vh;
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 80px;
+            color: rgba(255, 255, 255, 0.08);
+            margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.3);
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* ─── FAB ────────────────────────────────────────────────── */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fab:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
+        }
+
+        /* ─── LOADER ────────────────────────────────────────────── */
+        .loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 60vh;
+        }
+
+        .loader .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(139, 92, 246, 0.1);
+            border-top-color: #8B5CF6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ─── MODAL ────────────────────────────────────────────────── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 999;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: #1a103c;
+            border-radius: 24px 24px 0 0;
+            padding: 20px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            0% { transform: translateY(100%); }
+            100% { transform: translateY(0); }
+        }
+
+        .modal-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin: 0 auto 16px;
+        }
+
+        .modal-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .modal-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .modal-item .icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .modal-item .icon.purple {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8B5CF6;
+        }
+
+        .modal-item .icon.red {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .modal-item .icon.cyan {
+            background: rgba(6, 182, 212, 0.2);
+            color: #06B6D4;
+        }
+
+        .modal-item .icon.green {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10B981;
+        }
+
+        .modal-item .label {
+            flex: 1;
+            font-size: 15px;
+            color: #fff;
+        }
+
+        .modal-item .label .sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ─── RESPONSIVE ──────────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .header { padding: 50px 16px 12px; }
+            .tabs { padding: 0 12px 8px; }
+            .chat-list { padding: 4px 8px 70px; }
+            .chat-item { padding: 8px 10px; }
+            .logo { font-size: 20px; letter-spacing: 3px; }
+            .fab { bottom: 20px; right: 20px; width: 50px; height: 50px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg"></div>
+
+    <div class="app" id="app">
+
+        <!-- ─── HEADER ────────────────────────────────────────────── -->
+        <div class="header">
+            <div class="logo">AURA</div>
+            <div class="header-actions">
+                <button onclick="window.location.href='/global_search.html'">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button onclick="openMenu()">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ─── TABS ────────────────────────────────────────────────── -->
+        <div class="tabs">
+            <button class="tab active" data-tab="chats" onclick="switchTab('chats')">
+                <i class="fas fa-comment-dots"></i> Chats
+            </button>
+            <button class="tab" data-tab="status" onclick="switchTab('status')">
+                <i class="fas fa-circle"></i> Status
+            </button>
+            <button class="tab" data-tab="calls" onclick="switchTab('calls')">
+                <i class="fas fa-phone"></i> Calls
+            </button>
+        </div>
+
+        <!-- ─── CHAT LIST ──────────────────────────────────────────── -->
+        <div class="chat-list" id="chatList">
+            <div class="loader">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- ─── FAB ────────────────────────────────────────────────── -->
+        <button class="fab" id="fabBtn" onclick="openNewChat()">
+            <i class="fas fa-plus"></i>
+        </button>
+
+    </div>
+
+    <!-- ─── NEW CHAT MODAL ────────────────────────────────────────── -->
+    <div class="modal-overlay" id="newChatModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div style="text-align:center;font-size:18px;font-weight:600;color:#fff;margin-bottom:16px;">New Chat</div>
+            <div class="modal-item" onclick="closeModal();window.location.href='/global_search.html'">
+                <div class="icon purple"><i class="fas fa-user-plus"></i></div>
+                <div class="label">New Chat</div>
+            </div>
+            <div class="modal-item" onclick="closeModal();window.location.href='/create_group.html'">
+                <div class="icon cyan"><i class="fas fa-users"></i></div>
+                <div class="label">New Group</div>
+            </div>
+            <div class="modal-item" onclick="closeModal();window.location.href='/create_channel.html'">
+                <div class="icon purple"><i class="fas fa-bullhorn"></i></div>
+                <div class="label">New Channel</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── MENU MODAL ────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="menuModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-item" onclick="closeMenu();window.location.href='/settings.html'">
+                <div class="icon purple"><i class="fas fa-cog"></i></div>
+                <div class="label">Settings</div>
+            </div>
+            <div class="modal-item" onclick="closeMenu();window.location.href='/profile.html'">
+                <div class="icon purple"><i class="fas fa-user"></i></div>
+                <div class="label">Profile</div>
+            </div>
+            <div class="modal-item" onclick="closeMenu();logout()">
+                <div class="icon red"><i class="fas fa-sign-out-alt"></i></div>
+                <div class="label" style="color:#ef4444;">Sign Out</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
+            authDomain: "aurachat-85f54.firebaseapp.com",
+            projectId: "aurachat-85f54",
+            storageBucket: "aurachat-85f54.firebasestorage.app",
+            messagingSenderId: "539789121540",
+            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // ─── DOM REFS ──────────────────────────────────────────────────
+        const chatList = document.getElementById('chatList');
+        const fabBtn = document.getElementById('fabBtn');
+
+        // ─── STATE ─────────────────────────────────────────────────────
+        let currentTab = 'chats';
+        let userId = '';
+        let chats = [];
+
+        // ─── AUTH CHECK ──────────────────────────────────────────────
+        auth.onAuthStateChanged(function(user) {
+            if (user) {
+                userId = user.uid;
+                loadChats();
+            } else {
+                // Check localStorage for mock user
+                const mockUser = localStorage.getItem('aura_user');
+                if (mockUser) {
+                    userId = mockUser;
+                    loadChats();
+                } else {
+                    window.location.href = '/email_verification.html';
+                }
+            }
+        });
+
+        // ─── LOAD CHATS ──────────────────────────────────────────────
+        async function loadChats() {
+            chatList.innerHTML = `
+                <div class="loader">
+                    <div class="spinner"></div>
+                </div>
+            `;
+
+            try {
+                // Get all chats where user is participant
+                const snapshot = await db.collection('chats')
+                    .where('participants', 'array-contains', userId)
+                    .orderBy('last_message_at', 'desc')
+                    .get();
+
+                chats = [];
+
+                if (snapshot.empty) {
+                    showEmptyState();
+                    return;
+                }
+
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    const chatId = doc.id;
+                    const chatType = data.type || 'direct';
+                    const participants = data.participants || [];
+                    const deletedFor = data.deleted_for || [];
+
+                    // Skip if deleted for this user
+                    if (deletedFor.includes(userId)) continue;
+
+                    // Get chat name for direct chats
+                    let chatName = data.name || 'Unknown';
+                    let chatAvatar = data.avatar_url || null;
+
+                    if (chatType === 'direct') {
+                        const otherId = participants.find(id => id !== userId);
+                        if (otherId) {
+                            const userDoc = await db.collection('users').doc(otherId).get();
+                            if (userDoc.exists) {
+                                const userData = userDoc.data();
+                                chatName = userData.display_name || userData.username || 'Unknown';
+                                chatAvatar = userData.avatar_url || null;
+                            }
+                        }
+                    }
+
+                    // Get unread count
+                    const unreadSnapshot = await db.collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .where('is_read', '==', false)
+                        .where('sender_id', '!=', userId)
+                        .get();
+                    const unreadCount = unreadSnapshot.size;
+
+                    // Get last message
+                    const lastMsgSnapshot = await db.collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .orderBy('created_at', 'desc')
+                        .limit(1)
+                        .get();
+
+                    let lastMessage = '';
+                    let lastMessageAt = null;
+
+                    if (!lastMsgSnapshot.empty) {
+                        const lastMsg = lastMsgSnapshot.docs[0].data();
+                        lastMessage = lastMsg.text || lastMsg.content || '';
+                        lastMessageAt = lastMsg.created_at || lastMsg.timestamp;
+                    }
+
+                    chats.push({
+                        id: chatId,
+                        name: chatName,
+                        avatar: chatAvatar,
+                        type: chatType,
+                        last_message: lastMessage,
+                        last_message_at: lastMessageAt,
+                        unread_count: unreadCount,
+                        isGroup: chatType === 'group',
+                        isChannel: chatType === 'channel'
+                    });
+                }
+
+                renderChats();
+
+            } catch (e) {
+                console.error('Load chats error:', e);
+                chatList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <h3>Error loading chats</h3>
+                        <p>${e.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // ─── RENDER CHATS ────────────────────────────────────────────
+        function renderChats() {
+            if (chats.length === 0) {
+                showEmptyState();
+                return;
+            }
+
+            chatList.innerHTML = chats.map(chat => `
+                <div class="chat-item" onclick="openChat('${chat.id}')">
+                    <div class="chat-avatar">
+                        ${chat.avatar ? `<img src="${chat.avatar}" />` : `<i class="fas ${chat.isChannel ? 'fa-bullhorn' : chat.isGroup ? 'fa-users' : 'fa-user'}"></i>`}
+                    </div>
+                    <div class="chat-info">
+                        <div class="name">
+                            ${chat.name}
+                            ${chat.isChannel ? `<span class="badge channel">CHANNEL</span>` : ''}
+                            ${chat.isGroup ? `<span class="badge group">GROUP</span>` : ''}
+                        </div>
+                        <div class="last-msg">${chat.last_message || 'No messages yet'}</div>
+                    </div>
+                    <div class="chat-meta">
+                        <div class="time">${formatTime(chat.last_message_at)}</div>
+                        ${chat.unread_count > 0 ? `<div class="unread">${chat.unread_count}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ─── EMPTY STATE ─────────────────────────────────────────────
+        function showEmptyState() {
+            chatList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-comment-dots"></i>
+                    <h3>No chats yet</h3>
+                    <p>Start a conversation with someone</p>
+                </div>
+            `;
+        }
+
+        // ─── OPEN CHAT ──────────────────────────────────────────────
+        function openChat(chatId) {
+            // Find chat data
+            const chat = chats.find(c => c.id === chatId);
+            if (chat) {
+                if (chat.isChannel) {
+                    window.location.href = `/channel_chat.html?chatId=${chatId}`;
+                } else {
+                    window.location.href = `/chat.html?chatId=${chatId}`;
+                }
+            }
+        }
+
+        // ─── FORMAT TIME ────────────────────────────────────────────
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+
+            let date;
+            if (timestamp.seconds) {
+                date = new Date(timestamp.seconds * 1000);
+            } else if (timestamp.toDate) {
+                date = timestamp.toDate();
+            } else {
+                date = new Date(timestamp);
+            }
+
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            if (date >= today) {
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else if (date >= yesterday) {
+                return 'Yesterday';
+            } else {
+                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            }
+        }
+
+        // ─── SWITCH TAB ──────────────────────────────────────────────
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(el => {
+                el.classList.toggle('active', el.dataset.tab === tab);
+            });
+
+            if (tab === 'chats') {
+                chatList.style.display = 'block';
+                renderChats();
+                fabBtn.style.display = 'flex';
+                fabBtn.innerHTML = '<i class="fas fa-plus"></i>';
+                fabBtn.onclick = openNewChat;
+            } else if (tab === 'status') {
+                chatList.style.display = 'block';
+                chatList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-circle" style="color:#06B6D4;"></i>
+                        <h3>Status</h3>
+                        <p>Coming soon...</p>
+                    </div>
+                `;
+                fabBtn.style.display = 'flex';
+                fabBtn.innerHTML = '<i class="fas fa-camera"></i>';
+                fabBtn.onclick = () => { /* Add status */ };
+            } else if (tab === 'calls') {
+                chatList.style.display = 'block';
+                chatList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-phone"></i>
+                        <h3>Calls</h3>
+                        <p>Tap + to start a call</p>
+                    </div>
+                `;
+                fabBtn.style.display = 'flex';
+                fabBtn.innerHTML = '<i class="fas fa-phone"></i>';
+                fabBtn.onclick = () => { /* Start call */ };
+            }
+        }
+
+        // ─── MODAL FUNCTIONS ─────────────────────────────────────────
+        function openNewChat() {
+            document.getElementById('newChatModal').classList.add('show');
+        }
+
+        function openMenu() {
+            document.getElementById('menuModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('newChatModal').classList.remove('show');
+        }
+
+        function closeMenu() {
+            document.getElementById('menuModal').classList.remove('show');
+        }
+
+        // Close modal on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('show');
+                }
+            });
+        });
+
+        // ─── LOGOUT ──────────────────────────────────────────────────
+        async function logout() {
+            closeMenu();
+            try {
+                await auth.signOut();
+                localStorage.removeItem('aura_user');
+                localStorage.removeItem('aura_username');
+                localStorage.removeItem('aura_has_profile');
+                window.location.href = '/onboarding.html';
+            } catch (e) {
+                console.error('Logout error:', e);
+                // Force logout anyway
+                localStorage.clear();
+                window.location.href = '/onboarding.html';
+            }
+        }
+
+        console.log('💬 AURA Chat — Chats List (HTML)');
+    </script>
+
+</body>
+</html>
