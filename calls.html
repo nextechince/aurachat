@@ -48,33 +48,85 @@
             flex-direction: column;
         }
 
-        /* ─── HEADER ────────────────────────────────────────────── */
         .header {
-            padding: 16px 20px;
+            padding: 60px 20px 16px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            justify-content: space-between;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
             flex-shrink: 0;
         }
 
-        .header .back {
+        .header .title {
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .header-actions button {
             background: none;
             border: none;
             color: rgba(255, 255, 255, 0.7);
             font-size: 20px;
             cursor: pointer;
             padding: 8px;
+            border-radius: 12px;
+            transition: background 0.3s ease;
+            font-family: 'Inter', sans-serif;
         }
 
-        .header .title {
+        .header-actions button:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tabs {
+            display: flex;
+            padding: 0 20px 12px;
+            gap: 8px;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            flex-shrink: 0;
+        }
+
+        .tab {
             flex: 1;
-            font-size: 20px;
-            font-weight: 700;
-            color: #fff;
+            padding: 10px 0;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            background: none;
+            border: none;
+            font-family: 'Inter', sans-serif;
+            text-decoration: none;
+            display: block;
         }
 
-        /* ─── USER LIST ──────────────────────────────────────────── */
+        .tab.active {
+            color: #fff;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+        }
+
+        .tab:hover:not(.active) {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .tab i { margin-right: 6px; }
+
         .user-list {
             flex: 1;
             overflow-y: auto;
@@ -178,7 +230,6 @@
         .user-item .actions button.call { color: #10B981; }
         .user-item .actions button.call:hover { background: rgba(16, 185, 129, 0.2); }
 
-        /* ─── EMPTY STATE ────────────────────────────────────────── */
         .empty-state {
             display: flex;
             flex-direction: column;
@@ -207,23 +258,6 @@
             margin-top: 4px;
         }
 
-        .empty-state .btn {
-            margin-top: 20px;
-            padding: 12px 32px;
-            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-            border: none;
-            border-radius: 24px;
-            color: #fff;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            font-family: 'Inter', sans-serif;
-            transition: transform 0.2s ease;
-        }
-
-        .empty-state .btn:hover { transform: translateY(-2px); }
-
-        /* ─── LOADER ────────────────────────────────────────────── */
         .loader {
             display: flex;
             align-items: center;
@@ -242,7 +276,6 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ─── FAB ────────────────────────────────────────────────── */
         .fab {
             position: fixed;
             bottom: 30px;
@@ -267,7 +300,6 @@
             box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
         }
 
-        /* ─── MODAL ────────────────────────────────────────────────── */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -349,178 +381,17 @@
             color: #fff;
         }
 
-        .modal-item .label .sub {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.3);
-        }
-
         .modal-item .arrow {
             color: rgba(255, 255, 255, 0.2);
         }
 
-        /* ─── INCOMING CALL ────────────────────────────────────────── */
-        .incoming-call {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 1000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            padding: 40px;
-        }
-
-        .incoming-call.show { display: flex; }
-
-        .incoming-call .avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            font-size: 48px;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: 24px;
-        }
-
-        .incoming-call .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .incoming-call .name {
-            font-size: 24px;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .incoming-call .call-type {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.5);
-            margin-top: 8px;
-        }
-
-        .incoming-call .actions {
-            display: flex;
-            gap: 48px;
-            margin-top: 48px;
-        }
-
-        .incoming-call .actions button {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            border: none;
-            font-size: 28px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s ease;
-        }
-
-        .incoming-call .actions button:hover { transform: scale(1.05); }
-        .incoming-call .actions .decline { background: #ef4444; color: #fff; }
-        .incoming-call .actions .accept { background: #10B981; color: #fff; }
-
-        /* ─── OUTGOING CALL ────────────────────────────────────────── */
-        .outgoing-call {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 1000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            padding: 40px;
-        }
-
-        .outgoing-call.show { display: flex; }
-
-        .outgoing-call .avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            font-size: 48px;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: 24px;
-        }
-
-        .outgoing-call .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .outgoing-call .name {
-            font-size: 24px;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .outgoing-call .call-type {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.5);
-            margin-top: 8px;
-        }
-
-        .outgoing-call .pulse-ring {
-            margin: 24px 0;
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: rgba(139, 92, 246, 0.1);
-            animation: pulse 1.5s ease-in-out infinite;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(1.5); opacity: 0; }
-        }
-
-        .outgoing-call .cancel-btn {
-            margin-top: 24px;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            border: none;
-            background: #ef4444;
-            color: #fff;
-            font-size: 28px;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-        }
-
-        .outgoing-call .cancel-btn:hover { transform: scale(1.05); }
-
         @media (max-width: 640px) {
             .app { max-width: 100%; }
+            .header { padding: 50px 16px 12px; }
             .user-item { padding: 10px 12px; }
             .user-item .avatar { width: 48px; height: 48px; }
-            .incoming-call .avatar { width: 100px; height: 100px; }
-            .incoming-call .actions { gap: 32px; }
+            .tabs { padding: 0 12px 8px; }
+            .fab { bottom: 20px; right: 20px; width: 50px; height: 50px; }
         }
     </style>
 </head>
@@ -528,14 +399,32 @@
 
     <div class="bg"></div>
 
-    <div class="app" id="app">
+    <div class="app">
 
         <!-- ─── HEADER ────────────────────────────────────────────── -->
         <div class="header">
-            <button class="back" onclick="window.history.back()">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-            <div class="title">New Call</div>
+            <div class="title">AURA</div>
+            <div class="header-actions">
+                <button onclick="window.location.href='/global_search.html'">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button onclick="openMenu()">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ─── TABS ────────────────────────────────────────────────── -->
+        <div class="tabs">
+            <a href="/chats.html" class="tab" data-tab="chats">
+                <i class="fas fa-comment-dots"></i> Chats
+            </a>
+            <a href="/status.html" class="tab" data-tab="status">
+                <i class="fas fa-circle"></i> Status
+            </a>
+            <a href="/calls.html" class="tab active" data-tab="calls">
+                <i class="fas fa-phone"></i> Calls
+            </a>
         </div>
 
         <!-- ─── USER LIST ──────────────────────────────────────────── -->
@@ -575,36 +464,19 @@
         </div>
     </div>
 
-    <!-- ─── INCOMING CALL ──────────────────────────────────────────── -->
-    <div class="incoming-call" id="incomingCall">
-        <div class="avatar" id="incomingAvatar">
-            <i class="fas fa-user"></i>
+    <!-- ─── MENU MODAL ─────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="menuModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-item" onclick="closeModal('menuModal');window.location.href='/settings.html'">
+                <div class="icon purple"><i class="fas fa-cog"></i></div>
+                <div class="label">Settings</div>
+            </div>
+            <div class="modal-item" onclick="closeModal('menuModal');window.location.href='/profile.html'">
+                <div class="icon purple"><i class="fas fa-user"></i></div>
+                <div class="label">Profile</div>
+            </div>
         </div>
-        <div class="name" id="incomingName">Unknown</div>
-        <div class="call-type" id="incomingType">Incoming video call...</div>
-        <div class="actions">
-            <button class="decline" onclick="declineCall()">
-                <i class="fas fa-phone-slash"></i>
-            </button>
-            <button class="accept" onclick="acceptCall()">
-                <i class="fas fa-phone"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- ─── OUTGOING CALL ──────────────────────────────────────────── -->
-    <div class="outgoing-call" id="outgoingCall">
-        <div class="avatar" id="outgoingAvatar">
-            <i class="fas fa-user"></i>
-        </div>
-        <div class="name" id="outgoingName">Unknown</div>
-        <div class="call-type" id="outgoingType">Calling...</div>
-        <div class="pulse-ring">
-            <i class="fas fa-phone" style="color:#8B5CF6;font-size:32px;"></i>
-        </div>
-        <button class="cancel-btn" onclick="cancelOutgoingCall()">
-            <i class="fas fa-phone-slash"></i>
-        </button>
     </div>
 
     <script>
@@ -629,29 +501,18 @@
 
         // ─── DOM REFS ──────────────────────────────────────────────────
         const userList = document.getElementById('userList');
-        const incomingCall = document.getElementById('incomingCall');
-        const outgoingCall = document.getElementById('outgoingCall');
-        const incomingName = document.getElementById('incomingName');
-        const incomingType = document.getElementById('incomingType');
-        const incomingAvatar = document.getElementById('incomingAvatar');
-        const outgoingName = document.getElementById('outgoingName');
-        const outgoingType = document.getElementById('outgoingType');
-        const outgoingAvatar = document.getElementById('outgoingAvatar');
 
         // ─── STATE ─────────────────────────────────────────────────────
         let userId = '';
-        let users = [];
-        let isLoading = true;
-        let outgoingTimer = null;
-        let callTimeout = null;
 
-        // ─── AUTH ──────────────────────────────────────────────────────
+        // ─── GET USER ID ──────────────────────────────────────────────
         function getUserId() {
             const user = auth.currentUser;
             if (user) return user.uid;
             return getLocal('mock_user_id') || null;
         }
 
+        // ─── ✅ FIXED: NO REDIRECTS! ─────────────────────────────────
         auth.onAuthStateChanged(function(user) {
             const id = getUserId();
             if (id) {
@@ -659,21 +520,31 @@
                 console.log('✅ User found:', userId);
                 loadUsers();
             } else {
+                // ✅ NO REDIRECT - Just show message
                 userList.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-user-slash"></i>
                         <h3>Not signed in</h3>
-                        <p>Please sign in to make calls</p>
-                        <button class="btn" onclick="window.location.href='/onboarding.html'">Get Started</button>
+                        <p>Sign in to make calls</p>
+                        <button onclick="window.location.href='/email_verification.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Sign In</button>
                     </div>
                 `;
-                isLoading = false;
             }
         });
 
         // ─── LOAD USERS ───────────────────────────────────────────────
         async function loadUsers() {
-            if (!userId) return;
+            if (!userId) {
+                userList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-slash"></i>
+                        <h3>Not signed in</h3>
+                        <p>Sign in to make calls</p>
+                        <button onclick="window.location.href='/email_verification.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Sign In</button>
+                    </div>
+                `;
+                return;
+            }
 
             userList.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
 
@@ -724,9 +595,7 @@
                     });
                 }
 
-                users = usersData;
-                isLoading = false;
-                renderUsers();
+                renderUsers(usersData);
 
             } catch (e) {
                 console.error('Load users error:', e);
@@ -742,7 +611,7 @@
         }
 
         // ─── RENDER USERS ─────────────────────────────────────────────
-        function renderUsers() {
+        function renderUsers(users) {
             if (users.length === 0) {
                 userList.innerHTML = `
                     <div class="empty-state">
@@ -761,7 +630,7 @@
                 const initial = name.charAt(0).toUpperCase();
 
                 return `
-                    <div class="user-item" onclick="viewProfile('${user.id}')">
+                    <div class="user-item" onclick="alert('View profile: ${name}')">
                         <div class="avatar">
                             ${user.avatar_url ? `<img src="${user.avatar_url}" />` : initial}
                             <div class="online-dot ${isOnline ? 'online' : 'offline'}"></div>
@@ -771,10 +640,10 @@
                             <div class="status ${isOnline ? 'online' : ''}">${isOnline ? 'Online' : 'Offline'}</div>
                         </div>
                         <div class="actions">
-                            <button class="video" onclick="event.stopPropagation();startCall('${user.id}','${name}','${user.avatar_url || ''}',true)">
+                            <button class="video" onclick="event.stopPropagation();alert('📹 Video call to ${name}')">
                                 <i class="fas fa-video"></i>
                             </button>
-                            <button class="call" onclick="event.stopPropagation();startCall('${user.id}','${name}','${user.avatar_url || ''}',false)">
+                            <button class="call" onclick="event.stopPropagation();alert('📞 Voice call to ${name}')">
                                 <i class="fas fa-phone"></i>
                             </button>
                         </div>
@@ -783,106 +652,62 @@
             }).join('');
         }
 
-        // ─── START CALL ───────────────────────────────────────────────
-        function startCall(targetId, targetName, targetAvatar, isVideo) {
-            // Show outgoing call UI
-            outgoingName.textContent = targetName;
-            outgoingType.textContent = isVideo ? 'Video calling...' : 'Voice calling...';
-            if (targetAvatar) {
-                outgoingAvatar.innerHTML = `<img src="${targetAvatar}" />`;
-            } else {
-                outgoingAvatar.innerHTML = `<i class="fas fa-user"></i>`;
-            }
-            outgoingCall.classList.add('show');
-
-            // Simulate call connection
-            callTimeout = setTimeout(() => {
-                // Check if call was answered
-                // For demo, simulate answer after 3 seconds
-                setTimeout(() => {
-                    if (outgoingCall.classList.contains('show')) {
-                        // Simulate call connected
-                        alert('Call connected! (Demo)');
-                        outgoingCall.classList.remove('show');
-                    }
-                }, 2000);
-            }, 10000);
-
-            // Simulate ringing
-            console.log(`📞 Calling ${targetName}...`);
-        }
-
-        // ─── CANCEL OUTGOING CALL ────────────────────────────────────
-        function cancelOutgoingCall() {
-            if (callTimeout) {
-                clearTimeout(callTimeout);
-                callTimeout = null;
-            }
-            if (outgoingTimer) {
-                clearInterval(outgoingTimer);
-                outgoingTimer = null;
-            }
-            outgoingCall.classList.remove('show');
-            alert('Call cancelled');
-        }
-
-        // ─── SHOW CALL OPTIONS ──────────────────────────────────────
+        // ─── HELPERS ──────────────────────────────────────────────────
         function showCallOptions() {
+            if (!userId) {
+                alert('Please sign in first');
+                window.location.href = '/email_verification.html';
+                return;
+            }
             document.getElementById('callOptionsModal').classList.add('show');
         }
 
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('show');
-        }
-
-        // ─── JOIN BY CODE ─────────────────────────────────────────────
         function showCallCode() {
+            if (!userId) {
+                alert('Please sign in first');
+                return;
+            }
             const code = prompt('Enter call code:');
             if (code && code.trim()) {
                 alert(`Joining call: ${code.trim()} (Demo)`);
             }
         }
 
-        // ─── START GROUP CALL ─────────────────────────────────────────
         function startGroupCall(isVideo) {
+            if (!userId) {
+                alert('Please sign in first');
+                return;
+            }
             const code = 'GRP_' + Math.random().toString(36).substring(2, 8).toUpperCase();
             alert(`${isVideo ? 'Video' : 'Voice'} group call started!\nCode: ${code}`);
         }
 
-        // ─── VIEW PROFILE ─────────────────────────────────────────────
-        function viewProfile(userId) {
-            alert('View profile: ' + userId);
+        function openMenu() {
+            document.getElementById('menuModal').classList.add('show');
         }
 
-        // ─── INCOMING CALL (SIMULATED) ──────────────────────────────
-        function showIncomingCall(callerName, callerAvatar, isVideo) {
-            incomingName.textContent = callerName || 'Unknown';
-            incomingType.textContent = isVideo ? 'Incoming video call...' : 'Incoming voice call...';
-            if (callerAvatar) {
-                incomingAvatar.innerHTML = `<img src="${callerAvatar}" />`;
-            } else {
-                incomingAvatar.innerHTML = `<i class="fas fa-user"></i>`;
-            }
-            incomingCall.classList.add('show');
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('show');
         }
 
-        function acceptCall() {
-            incomingCall.classList.remove('show');
-            alert('Call accepted!');
+        // ─── CLOSE MODAL ON OVERLAY CLICK ────────────────────────────
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('show');
+                }
+            });
+        });
+
+        // ─── CHECK LOCALSTORAGE ON LOAD ─────────────────────────────
+        const mockId = getLocal('mock_user_id');
+        if (mockId && !auth.currentUser) {
+            userId = mockId;
+            console.log('✅ User from localStorage:', userId);
+            loadUsers();
         }
 
-        function declineCall() {
-            incomingCall.classList.remove('show');
-            alert('Call declined');
-        }
-
-        // ─── SIMULATE INCOMING CALL (DEMO) ──────────────────────────
-        // Uncomment to test incoming call UI
-        // setTimeout(() => {
-        //     showIncomingCall('John Doe', null, true);
-        // }, 5000);
-
-        console.log('📞 AURA Chat — Calls Screen');
+        console.log('📞 AURA Chat — Calls Screen (With Firebase, No Redirects)');
     </script>
 
 </body>
