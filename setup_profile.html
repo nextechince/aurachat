@@ -52,7 +52,6 @@
             100% { opacity: 1; transform: translateY(0); }
         }
 
-        /* ─── HEADER ────────────────────────────────────────────── */
         .header {
             display: flex;
             justify-content: space-between;
@@ -94,13 +93,9 @@
             white-space: nowrap;
         }
 
-        .skip-btn:hover {
-            background: rgba(139, 92, 246, 0.25);
-        }
-
+        .skip-btn:hover { background: rgba(139, 92, 246, 0.25); }
         .skip-btn.show { display: flex; }
 
-        /* ─── COMPLETE BANNER ────────────────────────────────────── */
         .complete-banner {
             display: none;
             background: rgba(16, 185, 129, 0.1);
@@ -120,7 +115,6 @@
             margin: 0;
         }
 
-        /* ─── AVATAR ────────────────────────────────────────────── */
         .avatar-wrapper {
             display: flex;
             flex-direction: column;
@@ -167,7 +161,6 @@
 
         .avatar-label:hover { color: rgba(255, 255, 255, 0.6); }
 
-        /* ─── INPUTS ────────────────────────────────────────────── */
         .input-group {
             margin-bottom: 16px;
         }
@@ -241,7 +234,6 @@
 
         .input-error.show { display: block; }
 
-        /* ─── VERIFICATION BANNER ────────────────────────────────── */
         .verification-banner {
             display: flex;
             align-items: center;
@@ -275,7 +267,6 @@
             margin: 0;
         }
 
-        /* ─── BUTTONS ────────────────────────────────────────────── */
         .btn-group {
             display: flex;
             gap: 12px;
@@ -342,7 +333,6 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ─── RESPONSIVE ──────────────────────────────────────────── */
         @media (max-width: 640px) {
             .container { padding: 10px 0 30px; }
             .title { font-size: 28px; }
@@ -477,30 +467,38 @@
 
         // ─── STATE ─────────────────────────────────────────────────────
         let isLoading = false;
-        let profileImage = null; // File object
+        let profileImage = null;
         let isExistingUser = false;
         let hasCompleteProfile = false;
         let existingUsername = '';
         let existingAvatarUrl = '';
         let userId = '';
 
-        // ─── AUTH ──────────────────────────────────────────────────────
-        // ✅ FIXED: No localStorage check - just use Firebase Auth
+        // ─── ✅ FIXED: Wait for auth state before doing anything ──────
+        let authChecked = false;
+
         auth.onAuthStateChanged(function(user) {
+            authChecked = true;
             if (user) {
                 userId = user.uid;
+                console.log('✅ User authenticated:', userId);
                 loadExistingProfile();
             } else {
-                // Not logged in - go to email verification
+                // ✅ FIXED: If no user, redirect to email_verification
+                console.log('⚠️ No user found, redirecting to email_verification');
                 window.location.href = '/email_verification.html';
             }
         });
 
         // ─── LOAD EXISTING PROFILE ──────────────────────────────────
         async function loadExistingProfile() {
-            if (!userId) return;
+            if (!userId) {
+                console.log('⚠️ No userId, waiting...');
+                return;
+            }
 
             try {
+                console.log('📂 Loading profile for:', userId);
                 const doc = await db.collection('users').doc(userId).get();
 
                 if (doc.exists) {
@@ -535,12 +533,13 @@
                         skipBtn.classList.add('show');
                         mainBtn.textContent = 'Update Profile';
                         
-                        // Two buttons
                         btnGroup.innerHTML = `
                             <button class="btn btn-secondary" id="skipToAppBtn" onclick="proceedToApp()">Proceed to App</button>
                             <button class="btn btn-primary" id="updateBtn" onclick="completeSetup()">Update Profile</button>
                         `;
                     }
+                } else {
+                    console.log('📝 New user, no profile yet');
                 }
             } catch (e) {
                 console.error('Load profile error:', e);
@@ -605,7 +604,6 @@
         async function uploadProfileImage(userId) {
             if (!profileImage) return null;
 
-            // ── UPLOAD TO CLOUDINARY ──
             const formData = new FormData();
             formData.append('file', profileImage);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -619,7 +617,6 @@
                 const data = await response.json();
 
                 if (data.secure_url) {
-                    // Update Firestore
                     await db.collection('users').doc(userId).set({
                         avatar_url: data.secure_url,
                         updated_at: firebase.firestore.FieldValue.serverTimestamp()
@@ -661,12 +658,22 @@
                 return;
             }
 
+            // Make sure we have a user
+            if (!userId) {
+                const user = auth.currentUser;
+                if (user) {
+                    userId = user.uid;
+                } else {
+                    showError('Not authenticated. Please try again.');
+                    window.location.href = '/email_verification.html';
+                    return;
+                }
+            }
+
             isLoading = true;
             setLoading(true);
 
             try {
-                if (!userId) throw new Error('Not authenticated');
-
                 // Check username taken
                 const taken = await isUsernameTaken(usernameVal);
                 if (taken) {
@@ -692,7 +699,7 @@
                     updated_at: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                // ✅ FIXED: No localStorage - just redirect to chats
+                // ✅ Redirect to chats
                 window.location.href = '/chats.html';
 
             } catch (e) {
@@ -731,18 +738,6 @@
             setTimeout(() => el.remove(), 4000);
         }
 
-        // ─── SETUP BUTTONS ──────────────────────────────────────────
-        function setupButtons() {
-            if (hasCompleteProfile) {
-                // Buttons already created from loadExistingProfile
-                return;
-            }
-
-            // Single button for new users
-            mainBtn.textContent = 'Complete Setup';
-            mainBtn.dataset.originalText = 'Complete Setup';
-        }
-
         // ─── ENTER KEY ──────────────────────────────────────────────
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
@@ -753,7 +748,7 @@
             }
         });
 
-        console.log('👤 AURA Chat — Setup Profile (HTML)');
+        console.log('👤 AURA Chat — Setup Profile (Fixed)');
     </script>
 
 </body>
