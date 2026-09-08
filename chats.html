@@ -2,67 +2,76 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AURA Chat</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>AURA - Chats</title>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ===== RESET & BASE ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0A0A0F;
-            color: #ffffff;
-            min-height: 100vh;
-            padding: 0;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
         }
 
-        .bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            background:
-                radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 80%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
-                #0A0A0F;
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(139, 92, 246, 0.4);
+            border-radius: 10px;
         }
 
-        .app {
-            position: relative;
-            z-index: 2;
-            max-width: 480px;
-            margin: 0 auto;
-            min-height: 100vh;
+        /* ===== APP CONTAINER ===== */
+        #app {
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            background: rgba(10, 10, 15, 0.92);
-            backdrop-filter: blur(20px);
+            background: #0A0A0F;
+            max-width: 480px;
+            margin: 0 auto;
+            position: relative;
         }
 
-        .header {
-            padding: 60px 20px 16px;
+        /* ===== SLIVER APP BAR ===== */
+        .sliver-app-bar {
+            background: #0A0A0F;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            flex-shrink: 0;
+            padding-bottom: 4px;
+        }
+
+        .app-bar-top {
+            padding: 20px 16px 0 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            background: rgba(10, 10, 15, 0.92);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            height: 72px;
         }
 
-        .logo {
+        .app-title {
             font-size: 24px;
             font-weight: 900;
             letter-spacing: 4px;
@@ -72,83 +81,154 @@
             background-clip: text;
         }
 
-        .header-actions {
+        .app-bar-actions {
             display: flex;
             gap: 4px;
         }
 
-        .header-actions button {
+        .app-bar-actions button {
             background: none;
             border: none;
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255,255,255,0.7);
             font-size: 20px;
+            padding: 8px;
             cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 12px;
-            transition: background 0.3s ease;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .header-actions button:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .tabs {
+            border-radius: 50%;
+            transition: background 0.2s;
+            width: 40px;
+            height: 40px;
             display: flex;
-            padding: 0 20px 12px;
-            gap: 8px;
-            background: rgba(10, 10, 15, 0.92);
-            backdrop-filter: blur(20px);
-            position: sticky;
-            top: 88px;
-            z-index: 9;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            align-items: center;
+            justify-content: center;
         }
 
-        .tab {
-            flex: 1;
-            padding: 10px 0;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.4);
-            cursor: pointer;
-            border-radius: 20px;
-            transition: all 0.3s ease;
-            background: none;
-            border: none;
-            font-family: 'Inter', sans-serif;
+        .app-bar-actions button:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        /* ===== TAB BAR ===== */
+        .tab-bar {
+            display: flex;
+            padding: 0 8px 8px 8px;
+            gap: 4px;
             position: relative;
         }
 
-        .tab.active {
-            color: #fff;
-            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
-            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
-        }
-
-        .tab:hover:not(.active) {
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .chat-list {
+        .tab-item {
             flex: 1;
-            padding: 8px 16px 80px;
+            padding: 12px 0;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 400;
+            color: rgba(255,255,255,0.4);
+            cursor: pointer;
+            border-radius: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            background: transparent;
+            border: none;
+            text-decoration: none;
+            display: block;
+        }
+
+        .tab-item.active {
+            color: #fff;
+            font-weight: 600;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+        }
+
+        /* ===== TAB CONTENT ===== */
+        .tab-content {
+            flex: 1;
             overflow-y: auto;
+            padding: 4px 0 80px 0;
+            scroll-behavior: smooth;
+        }
+
+        .tab-panel {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===== LOADING ===== */
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            min-height: 200px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(139, 92, 246, 0.2);
+            border-top-color: #8B5CF6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 300px;
+            padding: 20px;
+        }
+
+        .empty-icon {
+            font-size: 80px;
+            color: rgba(255,255,255,0.1);
+            margin-bottom: 16px;
+        }
+
+        .empty-title {
+            color: rgba(255,255,255,0.3);
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .empty-subtitle {
+            color: rgba(255,255,255,0.2);
+            font-size: 13px;
+        }
+
+        /* ===== CHAT LIST ===== */
+        .chat-list {
+            list-style: none;
         }
 
         .chat-item {
             display: flex;
             align-items: center;
-            padding: 10px 12px;
-            border-radius: 16px;
+            padding: 10px 16px;
             cursor: pointer;
-            transition: background 0.2s ease;
-            gap: 14px;
+            transition: background 0.15s;
+            border-radius: 8px;
+            margin: 0 4px;
+            text-decoration: none;
+            color: inherit;
         }
 
         .chat-item:hover {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255,255,255,0.03);
         }
 
         .chat-avatar {
@@ -160,8 +240,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
-            color: #8B5CF6;
             overflow: hidden;
             position: relative;
         }
@@ -172,99 +250,82 @@
             object-fit: cover;
         }
 
+        .chat-avatar .avatar-icon {
+            color: #8B5CF6;
+            font-size: 18px;
+        }
+
         .chat-info {
             flex: 1;
+            margin-left: 14px;
             min-width: 0;
         }
 
-        .chat-info .name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #fff;
+        .chat-header {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 6px;
         }
 
-        .chat-info .name .badge {
-            font-size: 8px;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 4px;
-            letter-spacing: 0.5px;
-        }
-
-        .chat-info .name .badge.group {
-            background: rgba(6, 182, 212, 0.2);
-            color: #06B6D4;
-        }
-
-        .chat-info .name .badge.channel {
-            background: rgba(139, 92, 246, 0.2);
-            color: #8B5CF6;
-        }
-
-        .chat-info .last-msg {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.4);
-            margin-top: 2px;
+        .chat-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #fff;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            max-width: 70%;
         }
 
-        .chat-meta {
-            text-align: right;
+        .chat-time {
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
             flex-shrink: 0;
             margin-left: 8px;
         }
 
-        .chat-meta .time {
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.3);
+        .chat-subtitle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 2px;
         }
 
-        .chat-meta .unread {
-            margin-top: 4px;
-            padding: 2px 8px;
-            border-radius: 10px;
+        .chat-last-message {
+            font-size: 13px;
+            color: rgba(255,255,255,0.4);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+        }
+
+        .chat-unread {
             background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            color: #fff;
             font-size: 11px;
             font-weight: 600;
-            color: #fff;
-            display: inline-block;
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 60vh;
+            padding: 1px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+            min-width: 20px;
             text-align: center;
         }
 
-        .empty-state i {
-            font-size: 80px;
-            color: rgba(255, 255, 255, 0.08);
-            margin-bottom: 16px;
-        }
-
-        .empty-state h3 {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.3);
-            margin-bottom: 8px;
-        }
-
-        .empty-state p {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.15);
-        }
-
-        .fab {
+        /* ===== FLOATING ACTION BUTTON ===== */
+        .fab-container {
             position: fixed;
             bottom: 30px;
             right: 30px;
+            max-width: 480px;
+            width: calc(100% - 60px);
+            display: flex;
+            justify-content: flex-end;
+            pointer-events: none;
+        }
+
+        .fab {
+            pointer-events: auto;
             width: 56px;
             height: 56px;
             border-radius: 16px;
@@ -273,552 +334,847 @@
             color: #fff;
             font-size: 24px;
             cursor: pointer;
-            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
+            text-decoration: none;
         }
 
         .fab:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 32px rgba(139, 92, 246, 0.5);
+            transform: scale(1.05);
+            box-shadow: 0 12px 30px rgba(139, 92, 246, 0.5);
         }
 
-        .loader {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 60vh;
+        .fab:active {
+            transform: scale(0.95);
         }
 
-        .loader .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(139, 92, 246, 0.1);
-            border-top-color: #8B5CF6;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
+        /* ===== MODAL ===== */
         .modal-overlay {
-            display: none;
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
-            z-index: 999;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            display: none;
             align-items: flex-end;
             justify-content: center;
+            animation: fadeInOverlay 0.25s ease;
         }
 
-        .modal-overlay.show { display: flex; }
+        .modal-overlay.active {
+            display: flex;
+        }
 
-        .modal {
+        @keyframes fadeInOverlay {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
             background: #1a103c;
             border-radius: 24px 24px 0 0;
-            padding: 20px;
             width: 100%;
             max-width: 480px;
             max-height: 80vh;
+            padding: 20px;
+            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             overflow-y: auto;
-            animation: slideUp 0.3s ease;
         }
 
         @keyframes slideUp {
-            0% { transform: translateY(100%); }
-            100% { transform: translateY(0); }
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
         }
 
         .modal-handle {
             width: 40px;
             height: 4px;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255,255,255,0.1);
             border-radius: 2px;
-            margin: 0 auto 16px;
+            margin: 0 auto 20px auto;
         }
 
         .modal-item {
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 14px 16px;
+            padding: 12px 16px;
             border-radius: 12px;
             cursor: pointer;
-            transition: background 0.2s ease;
+            transition: background 0.15s;
+            margin-bottom: 4px;
+            text-decoration: none;
+            color: inherit;
         }
 
         .modal-item:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255,255,255,0.05);
         }
 
-        .modal-item .icon {
-            width: 44px;
-            height: 44px;
+        .modal-item-icon {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            margin-right: 16px;
             font-size: 18px;
         }
 
-        .modal-item .icon.purple {
-            background: rgba(139, 92, 246, 0.2);
-            color: #8B5CF6;
+        .modal-item-label {
+            color: #fff;
+            font-size: 15px;
         }
 
-        .modal-item .icon.red {
+        .modal-item.danger .modal-item-label {
+            color: #ef4444;
+        }
+
+        .modal-item.danger .modal-item-icon {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
         }
 
-        .modal-item .icon.cyan {
-            background: rgba(6, 182, 212, 0.2);
-            color: #06B6D4;
+        /* ===== DIALOG ===== */
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeInOverlay 0.25s ease;
         }
 
-        .modal-item .icon.green {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10B981;
+        .dialog-overlay.active {
+            display: flex;
         }
 
-        .modal-item .label {
-            flex: 1;
+        .dialog-content {
+            background: #1a103c;
+            border-radius: 20px;
+            padding: 24px;
+            width: 90%;
+            max-width: 380px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .dialog-title {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .dialog-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: #fff;
             font-size: 15px;
+            outline: none;
+            transition: border 0.2s;
+            margin-bottom: 16px;
+        }
+
+        .dialog-input:focus {
+            border-color: #8B5CF6;
+        }
+
+        .dialog-input::placeholder {
+            color: rgba(255,255,255,0.3);
+        }
+
+        .dialog-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .dialog-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .dialog-btn:hover {
+            opacity: 0.8;
+        }
+
+        .dialog-btn-cancel {
+            background: transparent;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .dialog-btn-confirm {
+            background: #8B5CF6;
             color: #fff;
         }
 
-        .modal-item .label .sub {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.3);
+        /* ===== CHANNEL CODE BOX ===== */
+        .code-box {
+            padding: 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            text-align: center;
+            margin: 12px 0;
         }
 
-        @media (max-width: 640px) {
-            .header { padding: 50px 16px 12px; }
-            .tabs { padding: 0 12px 8px; }
-            .chat-list { padding: 4px 8px 70px; }
-            .chat-item { padding: 8px 10px; }
-            .logo { font-size: 20px; letter-spacing: 3px; }
-            .fab { bottom: 20px; right: 20px; width: 50px; height: 50px; }
+        .code-box-label {
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+        }
+
+        .code-box-code {
+            color: #8B5CF6;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin-top: 8px;
+            word-break: break-all;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 480px) {
+            .fab-container {
+                right: 20px;
+                bottom: 20px;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div class="bg"></div>
+    <div id="app">
+        <!-- App Bar -->
+        <div class="sliver-app-bar">
+            <div class="app-bar-top">
+                <div class="app-title">AURA</div>
+                <div class="app-bar-actions">
+                    <a href="global_search.html" class="app-bar-actions" style="text-decoration:none;">
+                        <button><i class="fas fa-search"></i></button>
+                    </a>
+                    <button onclick="showMenu()"><i class="fas fa-ellipsis-v"></i></button>
+                </div>
+            </div>
 
-    <div class="app" id="app">
-
-        <!-- ─── HEADER ────────────────────────────────────────────── -->
-        <div class="header">
-            <div class="logo">AURA</div>
-            <div class="header-actions">
-                <button onclick="window.location.href='/global_search.html'">
-                    <i class="fas fa-search"></i>
-                </button>
-                <button onclick="openMenu()">
-                    <i class="fas fa-ellipsis-v"></i>
-                </button>
+            <!-- Tabs -->
+            <div class="tab-bar">
+                <a href="chats.html" class="tab-item active" data-tab="0">
+                    Chats
+                </a>
+                <a href="status.html" class="tab-item" data-tab="1">
+                    Status
+                </a>
+                <a href="calls.html" class="tab-item" data-tab="2">
+                    Calls
+                </a>
             </div>
         </div>
 
-        <!-- ─── TABS ────────────────────────────────────────────────── -->
-<div class="tabs">
-    <a href="/chats.html" class="tab active" data-tab="chats">
-        <i class="fas fa-comment-dots"></i> Chats
-    </a>
-    <a href="/status.html" class="tab" data-tab="status">
-        <i class="fas fa-circle"></i> Status
-    </a>
-    <a href="/calls.html" class="tab" data-tab="calls">
-        <i class="fas fa-phone"></i> Calls
-    </a>
-</div>
+        <!-- Tab Content -->
+        <div class="tab-content" id="tabContent">
+            <!-- Chats Tab -->
+            <div class="tab-panel active" id="panel0">
+                <div id="chatsContainer">
+                    <div class="loading-container">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
 
-        <!-- ─── CHAT LIST ──────────────────────────────────────────── -->
-        <div class="chat-list" id="chatList">
-            <div class="loader">
-                <div class="spinner"></div>
+            <!-- Status Tab -->
+            <div class="tab-panel" id="panel1">
+                <div id="statusContainer">
+                    <div class="loading-container">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calls Tab -->
+            <div class="tab-panel" id="panel2">
+                <div class="calls-container">
+                    <div class="calls-icon">
+                        <i class="fas fa-phone"></i>
+                    </div>
+                    <div class="calls-text">Tap + to start a call</div>
+                </div>
             </div>
         </div>
 
-        <!-- ─── FAB ────────────────────────────────────────────────── -->
-        <button class="fab" id="fabBtn" onclick="openNewChat()">
-            <i class="fas fa-plus"></i>
-        </button>
-
+        <!-- FAB -->
+        <div class="fab-container">
+            <a href="#" class="fab" id="fabBtn" onclick="handleFabClick(event)">
+                <i class="fas fa-comment"></i>
+            </a>
+        </div>
     </div>
 
-    <!-- ─── NEW CHAT MODAL ────────────────────────────────────────── -->
+    <!-- ===== MODALS ===== -->
+
+    <!-- New Chat Options Modal -->
     <div class="modal-overlay" id="newChatModal">
-        <div class="modal">
+        <div class="modal-content">
             <div class="modal-handle"></div>
-            <div style="text-align:center;font-size:18px;font-weight:600;color:#fff;margin-bottom:16px;">New Chat</div>
-            <div class="modal-item" onclick="closeModal();window.location.href='/global_search.html'">
-                <div class="icon purple"><i class="fas fa-user-plus"></i></div>
-                <div class="label">New Chat</div>
+            <a href="global_search.html" class="modal-item" onclick="closeModal('newChatModal')">
+                <div class="modal-item-icon" style="background: rgba(139,92,246,0.2); color: #8B5CF6;">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+                <div class="modal-item-label">New Chat</div>
+            </a>
+            <a href="create_group.html" class="modal-item" onclick="closeModal('newChatModal')">
+                <div class="modal-item-icon" style="background: rgba(6,182,212,0.2); color: #06B6D4;">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="modal-item-label">New Group</div>
+            </a>
+            <a href="create_channel.html" class="modal-item" onclick="closeModal('newChatModal')">
+                <div class="modal-item-icon" style="background: rgba(251,191,36,0.2); color: #FBBF24;">
+                    <i class="fas fa-bullhorn"></i>
+                </div>
+                <div class="modal-item-label">New Channel</div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Status Options Modal -->
+    <div class="modal-overlay" id="statusModal">
+        <div class="modal-content">
+            <div class="modal-handle"></div>
+            <a href="#" class="modal-item" onclick="closeModal('statusModal'); alert('Camera feature coming soon!')">
+                <div class="modal-item-icon" style="background: rgba(139,92,246,0.2); color: #8B5CF6;">
+                    <i class="fas fa-camera"></i>
+                </div>
+                <div class="modal-item-label">Camera</div>
+            </a>
+            <a href="#" class="modal-item" onclick="closeModal('statusModal'); alert('Gallery feature coming soon!')">
+                <div class="modal-item-icon" style="background: rgba(6,182,212,0.2); color: #06B6D4;">
+                    <i class="fas fa-images"></i>
+                </div>
+                <div class="modal-item-label">Gallery</div>
+            </a>
+            <a href="#" class="modal-item" onclick="closeModal('statusModal'); alert('Text Status feature coming soon!')">
+                <div class="modal-item-icon" style="background: rgba(251,191,36,0.2); color: #FBBF24;">
+                    <i class="fas fa-font"></i>
+                </div>
+                <div class="modal-item-label">Text Status</div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Call Options Modal -->
+    <div class="modal-overlay" id="callModal">
+        <div class="modal-content">
+            <div class="modal-handle"></div>
+            
+            <div class="code-box">
+                <div class="code-box-label">Share this code to join</div>
+                <div class="code-box-code" id="channelCode">Loading...</div>
             </div>
-            <div class="modal-item" onclick="closeModal();window.location.href='/create_group.html'">
-                <div class="icon cyan"><i class="fas fa-users"></i></div>
-                <div class="label">New Group</div>
-            </div>
-            <div class="modal-item" onclick="closeModal();window.location.href='/create_channel.html'">
-                <div class="icon purple"><i class="fas fa-bullhorn"></i></div>
-                <div class="label">New Channel</div>
+
+            <a href="call_pick.html" class="modal-item" onclick="closeModal('callModal')">
+                <div class="modal-item-icon" style="background: rgba(139,92,246,0.2); color: #8B5CF6;">
+                    <i class="fas fa-user-search"></i>
+                </div>
+                <div class="modal-item-label">Call from Contacts</div>
+            </a>
+            <a href="call_active.html" class="modal-item" onclick="closeModal('callModal')">
+                <div class="modal-item-icon" style="background: rgba(6,182,212,0.2); color: #06B6D4;">
+                    <i class="fas fa-phone"></i>
+                </div>
+                <div class="modal-item-label">Start Voice Call</div>
+            </a>
+            <a href="call_active.html" class="modal-item" onclick="closeModal('callModal')">
+                <div class="modal-item-icon" style="background: rgba(251,191,36,0.2); color: #FBBF24;">
+                    <i class="fas fa-video"></i>
+                </div>
+                <div class="modal-item-label">Start Video Call</div>
+            </a>
+            <a href="#" class="modal-item" onclick="closeModal('callModal'); showJoinDialog()">
+                <div class="modal-item-icon" style="background: rgba(236,72,153,0.2); color: #EC4899;">
+                    <i class="fas fa-dial"></i>
+                </div>
+                <div class="modal-item-label">Join by Code</div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Menu Modal -->
+    <div class="modal-overlay" id="menuModal">
+        <div class="modal-content">
+            <div class="modal-handle"></div>
+            <a href="settings.html" class="modal-item" onclick="closeModal('menuModal')">
+                <div class="modal-item-icon" style="background: rgba(139,92,246,0.2); color: #8B5CF6;">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <div class="modal-item-label">Settings</div>
+            </a>
+            <a href="profile.html" class="modal-item" onclick="closeModal('menuModal')">
+                <div class="modal-item-icon" style="background: rgba(6,182,212,0.2); color: #06B6D4;">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="modal-item-label">Profile</div>
+            </a>
+            <div class="modal-item danger" onclick="closeModal('menuModal'); signOut()">
+                <div class="modal-item-icon">
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+                <div class="modal-item-label">Sign Out</div>
             </div>
         </div>
     </div>
 
-    <!-- ─── MENU MODAL ────────────────────────────────────────────── -->
-    <div class="modal-overlay" id="menuModal">
-        <div class="modal">
-            <div class="modal-handle"></div>
-            <div class="modal-item" onclick="closeMenu();window.location.href='/settings.html'">
-                <div class="icon purple"><i class="fas fa-cog"></i></div>
-                <div class="label">Settings</div>
-            </div>
-            <div class="modal-item" onclick="closeMenu();window.location.href='/profile.html'">
-                <div class="icon purple"><i class="fas fa-user"></i></div>
-                <div class="label">Profile</div>
-            </div>
-            <div class="modal-item" onclick="closeMenu();logout()">
-                <div class="icon red"><i class="fas fa-sign-out-alt"></i></div>
-                <div class="label" style="color:#ef4444;">Sign Out</div>
+    <!-- Join Call Dialog -->
+    <div class="dialog-overlay" id="joinDialog">
+        <div class="dialog-content">
+            <div class="dialog-title">Join Call</div>
+            <input type="text" class="dialog-input" id="joinCodeInput" placeholder="Enter channel name..." />
+            <div class="dialog-actions">
+                <button class="dialog-btn dialog-btn-cancel" onclick="closeDialog('joinDialog')">Cancel</button>
+                <button class="dialog-btn dialog-btn-confirm" onclick="joinCall()">Join</button>
             </div>
         </div>
     </div>
 
     <script>
-        // ─── FIREBASE CONFIG ──────────────────────────────────────────
+        // ============================================================
+        // FIREBASE CONFIG (Replace with your own)
+        // ============================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyDJV5x8PKgWhHBaavZ6z9rB3DuT3TEFtLA",
-            authDomain: "aurachat-85f54.firebaseapp.com",
-            projectId: "aurachat-85f54",
-            storageBucket: "aurachat-85f54.firebasestorage.app",
-            messagingSenderId: "539789121540",
-            appId: "1:539789121540:web:96ac597e52dd0a80573d51"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
         const db = firebase.firestore();
+        const auth = firebase.auth();
 
-        // ─── LOCAL STORAGE HELPERS ────────────────────────────────────
-        function getLocal(key) {
-            try { return localStorage.getItem(key); } catch (e) { return null; }
-        }
-
-        // ─── DOM REFS ──────────────────────────────────────────────────
-        const chatList = document.getElementById('chatList');
-        const fabBtn = document.getElementById('fabBtn');
-
-        // ─── STATE ─────────────────────────────────────────────────────
-        let currentTab = 'chats';
-        let userId = '';
+        // ============================================================
+        // STATE
+        // ============================================================
+        let currentTab = 0;
         let chats = [];
+        let isLoading = true;
+        let currentUser = null;
+        let mockUserId = null;
 
-        // ─── ✅ FIXED: Get user ID from localStorage ONLY ─────────────
-        // ✅ No redirect to email_verification - just show "Not logged in"
-        function getUserId() {
-            const user = auth.currentUser;
-            if (user) return user.uid;
-            return getLocal('mock_user_id') || null;
-        }
+        // ============================================================
+        // DOM REFS
+        // ============================================================
+        const chatsContainer = document.getElementById('chatsContainer');
+        const statusContainer = document.getElementById('statusContainer');
+        const fabBtn = document.getElementById('fabBtn');
+        const fabIcon = fabBtn.querySelector('i');
 
-        // ─── ✅ FIXED: No redirect - just show message ───────────────
-        auth.onAuthStateChanged(function(user) {
-            const id = getUserId();
-            if (id) {
-                userId = id;
-                console.log('✅ User found:', userId);
-                loadChats();
+        // ============================================================
+        // INIT
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check which page we're on based on URL
+            const path = window.location.pathname;
+            if (path.includes('status.html')) {
+                switchTab(1);
+            } else if (path.includes('calls.html')) {
+                switchTab(2);
             } else {
-                // ✅ NO REDIRECT - just show message
-                chatList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-user-slash"></i>
-                        <h3>Not signed in</h3>
-                        <p>Please sign in to see your chats</p>
-                        <button onclick="window.location.href='/onboarding.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Get Started</button>
-                    </div>
-                `;
+                switchTab(0);
             }
+            
+            initAuth();
+            setupTabHighlighting();
         });
 
-        // ─── LOAD CHATS ──────────────────────────────────────────────
-        async function loadChats() {
+        function setupTabHighlighting() {
+            const path = window.location.pathname;
+            document.querySelectorAll('.tab-item').forEach(tab => {
+                tab.classList.remove('active');
+                if (path.includes('status.html') && tab.textContent.trim() === 'Status') {
+                    tab.classList.add('active');
+                } else if (path.includes('calls.html') && tab.textContent.trim() === 'Calls') {
+                    tab.classList.add('active');
+                } else if ((path.includes('chats.html') || path === '/' || path === '/index.html') && tab.textContent.trim() === 'Chats') {
+                    tab.classList.add('active');
+                }
+            });
+        }
+
+        function initAuth() {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    currentUser = user;
+                    loadChats();
+                    loadStatuses();
+                } else {
+                    // For demo, use mock user
+                    mockUserId = 'mock_user_123';
+                    loadChats();
+                    loadStatuses();
+                }
+            });
+        }
+
+        // ============================================================
+        // TAB SWITCHING
+        // ============================================================
+        function switchTab(index) {
+            currentTab = index;
+            
+            // Update panels
+            document.querySelectorAll('.tab-panel').forEach((panel, i) => {
+                panel.classList.toggle('active', i === index);
+            });
+
+            // Update FAB
+            updateFab(index);
+        }
+
+        function updateFab(index) {
+            const icons = ['fa-comment', 'fa-camera', 'fa-phone-plus'];
+            const labels = ['New Chat', 'Add Status', 'New Call'];
+            fabIcon.className = `fas ${icons[index]}`;
+            fabBtn.title = labels[index];
+        }
+
+        // ============================================================
+        // LOAD CHATS (Firebase)
+        // ============================================================
+        function loadChats() {
+            isLoading = true;
+            showLoading(chatsContainer);
+
+            const userId = currentUser ? currentUser.uid : mockUserId;
             if (!userId) {
-                chatList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-user-slash"></i>
-                        <h3>Not signed in</h3>
-                        <p>Please sign in to see your chats</p>
-                        <button onclick="window.location.href='/onboarding.html'" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Get Started</button>
-                    </div>
-                `;
+                showEmptyChats();
                 return;
             }
 
-            chatList.innerHTML = `
-                <div class="loader">
+            db.collection('users')
+                .doc(userId)
+                .collection('chats')
+                .orderBy('last_message_at', 'desc')
+                .onSnapshot((snapshot) => {
+                    isLoading = false;
+                    chats = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        data.id = doc.id;
+                        chats.push(data);
+                    });
+                    renderChats();
+                }, (error) => {
+                    isLoading = false;
+                    console.error('Error loading chats:', error);
+                    showEmptyChats();
+                });
+        }
+
+        function renderChats() {
+            if (isLoading) {
+                showLoading(chatsContainer);
+                return;
+            }
+
+            if (chats.length === 0) {
+                showEmptyChats();
+                return;
+            }
+
+            let html = '<ul class="chat-list">';
+            chats.forEach(chat => {
+                html += buildChatItem(chat);
+            });
+            html += '</ul>';
+            chatsContainer.innerHTML = html;
+        }
+
+        function buildChatItem(chat) {
+            const name = chat.name || 'Unknown';
+            const avatar = chat.avatar_url || null;
+            const lastMessage = chat.last_message || '';
+            const time = chat.last_message_at || null;
+            const unread = chat.unread_count || 0;
+            const chatType = chat.type || 'direct';
+            const isGroup = chatType === 'group';
+            const isChannel = chatType === 'channel';
+
+            let avatarHtml = '';
+            if (avatar) {
+                avatarHtml = `<img src="${avatar}" alt="${name}" />`;
+            } else {
+                let icon = 'fa-user';
+                if (isChannel) icon = 'fa-bullhorn';
+                else if (isGroup) icon = 'fa-users';
+                avatarHtml = `<i class="fas ${icon} avatar-icon"></i>`;
+            }
+
+            const timeStr = time ? formatTime(time) : '';
+
+            let unreadHtml = '';
+            if (unread > 0) {
+                unreadHtml = `<span class="chat-unread">${unread}</span>`;
+            }
+
+            const chatId = chat.id;
+            const href = isChannel 
+                ? `channel.html?id=${chatId}&name=${encodeURIComponent(name)}`
+                : `chat.html?id=${chatId}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar || '')}&group=${isGroup}`;
+
+            return `
+                <a href="${href}" class="chat-item">
+                    <div class="chat-avatar">${avatarHtml}</div>
+                    <div class="chat-info">
+                        <div class="chat-header">
+                            <span class="chat-name">${escapeHtml(name)}</span>
+                            <span class="chat-time">${timeStr}</span>
+                        </div>
+                        <div class="chat-subtitle">
+                            <span class="chat-last-message">${escapeHtml(lastMessage)}</span>
+                            ${unreadHtml}
+                        </div>
+                    </div>
+                </a>
+            `;
+        }
+
+        function showLoading(container) {
+            container.innerHTML = `
+                <div class="loading-container">
                     <div class="spinner"></div>
                 </div>
             `;
-
-            try {
-                const snapshot = await db.collection('chats')
-                    .where('participants', 'array-contains', userId)
-                    .orderBy('last_message_at', 'desc')
-                    .get();
-
-                chats = [];
-
-                if (snapshot.empty) {
-                    showEmptyState();
-                    return;
-                }
-
-                for (const doc of snapshot.docs) {
-                    const data = doc.data();
-                    const chatId = doc.id;
-                    const chatType = data.type || 'direct';
-                    const participants = data.participants || [];
-                    const deletedFor = data.deleted_for || [];
-
-                    if (deletedFor.includes(userId)) continue;
-
-                    let chatName = data.name || 'Unknown';
-                    let chatAvatar = data.avatar_url || null;
-
-                    if (chatType === 'direct') {
-                        const otherId = participants.find(id => id !== userId);
-                        if (otherId) {
-                            const userDoc = await db.collection('users').doc(otherId).get();
-                            if (userDoc.exists) {
-                                const userData = userDoc.data();
-                                chatName = userData.display_name || userData.username || 'Unknown';
-                                chatAvatar = userData.avatar_url || null;
-                            }
-                        }
-                    }
-
-                    // ✅ FIXED: Simple unread count - no complex query
-                    const unreadCount = 0;
-
-                    const lastMsgSnapshot = await db.collection('chats')
-                        .doc(chatId)
-                        .collection('messages')
-                        .orderBy('created_at', 'desc')
-                        .limit(1)
-                        .get();
-
-                    let lastMessage = '';
-                    let lastMessageAt = null;
-
-                    if (!lastMsgSnapshot.empty) {
-                        const lastMsg = lastMsgSnapshot.docs[0].data();
-                        lastMessage = lastMsg.text || lastMsg.content || '';
-                        lastMessageAt = lastMsg.created_at || lastMsg.timestamp;
-                    }
-
-                    chats.push({
-                        id: chatId,
-                        name: chatName,
-                        avatar: chatAvatar,
-                        type: chatType,
-                        last_message: lastMessage,
-                        last_message_at: lastMessageAt,
-                        unread_count: unreadCount,
-                        isGroup: chatType === 'group',
-                        isChannel: chatType === 'channel'
-                    });
-                }
-
-                renderChats();
-
-            } catch (e) {
-                console.error('Load chats error:', e);
-                chatList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <h3>Error loading chats</h3>
-                        <p>${e.message}</p>
-                        <button onclick="loadChats()" style="margin-top:16px;padding:12px 32px;background:linear-gradient(135deg,#8B5CF6,#06B6D4);border:none;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Try Again</button>
-                    </div>
-                `;
-            }
         }
 
-        // ─── RENDER CHATS ────────────────────────────────────────────
-        function renderChats() {
-            if (chats.length === 0) {
-                showEmptyState();
-                return;
-            }
-
-            chatList.innerHTML = chats.map(chat => `
-                <div class="chat-item" onclick="openChat('${chat.id}')">
-                    <div class="chat-avatar">
-                        ${chat.avatar ? `<img src="${chat.avatar}" />` : `<i class="fas ${chat.isChannel ? 'fa-bullhorn' : chat.isGroup ? 'fa-users' : 'fa-user'}"></i>`}
-                    </div>
-                    <div class="chat-info">
-                        <div class="name">
-                            ${chat.name}
-                            ${chat.isChannel ? `<span class="badge channel">CHANNEL</span>` : ''}
-                            ${chat.isGroup ? `<span class="badge group">GROUP</span>` : ''}
-                        </div>
-                        <div class="last-msg">${chat.last_message || 'No messages yet'}</div>
-                    </div>
-                    <div class="chat-meta">
-                        <div class="time">${formatTime(chat.last_message_at)}</div>
-                        ${chat.unread_count > 0 ? `<div class="unread">${chat.unread_count}</div>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // ─── EMPTY STATE ─────────────────────────────────────────────
-        function showEmptyState() {
-            chatList.innerHTML = `
+        function showEmptyChats() {
+            chatsContainer.innerHTML = `
                 <div class="empty-state">
-                    <i class="fas fa-comment-dots"></i>
-                    <h3>No chats yet</h3>
-                    <p>Start a conversation with someone</p>
+                    <div class="empty-icon"><i class="fas fa-comment-dots"></i></div>
+                    <div class="empty-title">No chats yet</div>
+                    <div class="empty-subtitle">Start a conversation</div>
                 </div>
             `;
         }
 
-        // ─── OPEN CHAT ──────────────────────────────────────────────
-        function openChat(chatId) {
-            const chat = chats.find(c => c.id === chatId);
-            if (chat) {
-                if (chat.isChannel) {
-                    window.location.href = `/channel_chat.html?chatId=${chatId}`;
-                } else {
-                    window.location.href = `/chat.html?chatId=${chatId}`;
-                }
+        // ============================================================
+        // LOAD STATUSES (Firebase) - for status.html page
+        // ============================================================
+        function loadStatuses() {
+            const userId = currentUser ? currentUser.uid : mockUserId;
+            if (!userId) {
+                statusContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="fas fa-camera"></i></div>
+                        <div class="empty-title">No status updates</div>
+                    </div>
+                `;
+                return;
+            }
+
+            db.collection('users')
+                .doc(userId)
+                .collection('statuses')
+                .orderBy('created_at', 'desc')
+                .limit(20)
+                .onSnapshot((snapshot) => {
+                    if (snapshot.empty) {
+                        statusContainer.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="fas fa-camera"></i></div>
+                                <div class="empty-title">No status updates</div>
+                                <div class="empty-subtitle">Tap + to add a status</div>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    let html = '<div class="status-list">';
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const name = data.userName || 'Unknown';
+                        const avatar = data.userAvatar || null;
+                        const time = data.created_at ? formatTime(data.created_at) : '';
+
+                        html += `
+                            <a href="status_view.html?id=${doc.id}" class="status-item" style="text-decoration:none;color:inherit;display:flex;align-items:center;padding:12px;background:rgba(255,255,255,0.03);border-radius:12px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.05);">
+                                <div class="status-avatar" style="width:50px;height:50px;border-radius:50%;border:2px solid #8B5CF6;padding:2px;margin-right:14px;">
+                                    ${avatar ? `<img src="${avatar}" alt="${name}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />` : `<div style="width:100%;height:100%;border-radius:50%;background:#1a103c;display:flex;align-items:center;justify-content:center;color:#8B5CF6;font-size:20px;"><i class="fas fa-user"></i></div>`}
+                                </div>
+                                <div class="status-info" style="flex:1;">
+                                    <div class="status-name" style="font-weight:600;font-size:14px;">${escapeHtml(name)}</div>
+                                    <div class="status-time" style="font-size:12px;color:rgba(255,255,255,0.3);">${time}</div>
+                                </div>
+                            </a>
+                        `;
+                    });
+                    html += '</div>';
+                    statusContainer.innerHTML = html;
+                }, (error) => {
+                    console.error('Error loading statuses:', error);
+                });
+        }
+
+        // ============================================================
+        // FAB HANDLER
+        // ============================================================
+        function handleFabClick(e) {
+            e.preventDefault();
+            const path = window.location.pathname;
+            
+            if (path.includes('status.html')) {
+                openModal('statusModal');
+            } else if (path.includes('calls.html')) {
+                openModal('callModal');
+                generateChannelCode();
+            } else {
+                openModal('newChatModal');
             }
         }
 
-        // ─── FORMAT TIME ────────────────────────────────────────────
-        function formatTime(timestamp) {
-            if (!timestamp) return '';
+        // ============================================================
+        // MODAL HELPERS
+        // ============================================================
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function closeDialog(id) {
+            document.getElementById(id).classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Close modal on overlay click
+        document.querySelectorAll('.modal-overlay, .dialog-overlay').forEach(el => {
+            el.addEventListener('click', (e) => {
+                if (e.target === el) {
+                    el.classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+            });
+        });
+
+        // ============================================================
+        // MENU
+        // ============================================================
+        function showMenu() {
+            openModal('menuModal');
+        }
+
+        // ============================================================
+        // CALL FUNCTIONS
+        // ============================================================
+        function generateChannelCode() {
+            const code = 'aura_' + Math.random().toString(36).substring(2, 10);
+            document.getElementById('channelCode').textContent = code;
+            return code;
+        }
+
+        function showJoinDialog() {
+            closeModal('callModal');
+            document.getElementById('joinDialog').classList.add('active');
+            document.getElementById('joinCodeInput').value = '';
+            setTimeout(() => document.getElementById('joinCodeInput').focus(), 100);
+        }
+
+        function joinCall() {
+            const code = document.getElementById('joinCodeInput').value.trim();
+            if (code) {
+                closeDialog('joinDialog');
+                window.location.href = `call_active.html?channel=${encodeURIComponent(code)}`;
+            }
+        }
+
+        // ============================================================
+        // AUTH - SIGN OUT
+        // ============================================================
+        async function signOut() {
+            try {
+                await auth.signOut();
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Sign out error:', error);
+                alert('Error signing out. Please try again.');
+            }
+        }
+
+        // ============================================================
+        // UTILITY FUNCTIONS
+        // ============================================================
+        function formatTime(time) {
+            if (!time) return '';
 
             let date;
-            if (timestamp.seconds) {
-                date = new Date(timestamp.seconds * 1000);
-            } else if (timestamp.toDate) {
-                date = timestamp.toDate();
+            if (time.toDate) {
+                date = time.toDate();
+            } else if (time instanceof Date) {
+                date = time;
+            } else if (typeof time === 'string') {
+                date = new Date(time);
             } else {
-                date = new Date(timestamp);
+                return '';
             }
 
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
+            const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-            if (date >= today) {
+            if (msgDate.getTime() === today.getTime()) {
                 return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } else if (date >= yesterday) {
+            } else if (msgDate.getTime() === yesterday.getTime()) {
                 return 'Yesterday';
             } else {
                 return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
             }
         }
 
-        // ─── SWITCH TAB ──────────────────────────────────────────────
-        function switchTab(tab) {
-            currentTab = tab;
-            document.querySelectorAll('.tab').forEach(el => {
-                el.classList.toggle('active', el.dataset.tab === tab);
-            });
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
-            if (tab === 'chats') {
-                chatList.style.display = 'block';
-                if (chats.length > 0) renderChats();
-                fabBtn.style.display = 'flex';
-                fabBtn.innerHTML = '<i class="fas fa-plus"></i>';
-                fabBtn.onclick = openNewChat;
-            } else if (tab === 'status') {
-                chatList.style.display = 'block';
-                chatList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-circle" style="color:#06B6D4;"></i>
-                        <h3>Status</h3>
-                        <p>Coming soon...</p>
-                    </div>
-                `;
-                fabBtn.style.display = 'flex';
-                fabBtn.innerHTML = '<i class="fas fa-camera"></i>';
-                fabBtn.onclick = () => { /* Add status */ };
-            } else if (tab === 'calls') {
-                chatList.style.display = 'block';
-                chatList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-phone"></i>
-                        <h3>Calls</h3>
-                        <p>Tap + to start a call</p>
-                    </div>
-                `;
-                fabBtn.style.display = 'flex';
-                fabBtn.innerHTML = '<i class="fas fa-phone"></i>';
-                fabBtn.onclick = () => { /* Start call */ };
+        // ============================================================
+        // KEYBOARD SHORTCUTS
+        // ============================================================
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-overlay.active, .dialog-overlay.active').forEach(el => {
+                    el.classList.remove('active');
+                    document.body.style.overflow = '';
+                });
             }
-        }
-
-        // ─── MODAL FUNCTIONS ─────────────────────────────────────────
-        function openNewChat() {
-            document.getElementById('newChatModal').classList.add('show');
-        }
-
-        function openMenu() {
-            document.getElementById('menuModal').classList.add('show');
-        }
-
-        function closeModal() {
-            document.getElementById('newChatModal').classList.remove('show');
-        }
-
-        function closeMenu() {
-            document.getElementById('menuModal').classList.remove('show');
-        }
-
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.classList.remove('show');
-                }
-            });
         });
 
-        // ─── LOGOUT ──────────────────────────────────────────────────
-        async function logout() {
-            closeMenu();
-            try {
-                await auth.signOut();
-                localStorage.clear();
-                window.location.href = '/onboarding.html';
-            } catch (e) {
-                console.error('Logout error:', e);
-                localStorage.clear();
-                window.location.href = '/onboarding.html';
-            }
-        }
-
-        // ─── CHECK LOCALSTORAGE ON LOAD ─────────────────────────────
-        const mockId = getLocal('mock_user_id');
-        if (mockId && !auth.currentUser) {
-            userId = mockId;
-            console.log('✅ User from localStorage:', userId);
-            loadChats();
-        }
-
-        console.log('💬 AURA Chat — Chats List (No Redirects)');
+        console.log('🚀 AURA Chat loaded successfully!');
+        console.log('📱 Connected to Firebase');
     </script>
 
 </body>
