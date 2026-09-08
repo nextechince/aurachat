@@ -755,19 +755,10 @@
                 loadExistingProfile().then(() => {
                     setupButtons();
                 });
-            } else {
-                // Not logged in - go to login
-                window.location.href = '/email_verification.html';
-            }
+            } 
         });
 
-        // Check localStorage for existing session
-        const storedUser = localStorage.getItem('aura_user');
-        if (storedUser && !auth.currentUser) {
-            // Try to sign in with stored user (handle mock users)
-            // For now, just redirect to email verification
-            window.location.href = '/email_verification.html';
-        }
+        
 
         console.log('👤 AURA Chat — Setup Profile Screen (HTML)');
     </script>
