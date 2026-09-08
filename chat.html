@@ -11,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -61,9 +60,6 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
             background: rgba(10, 10, 15, 0.95);
             backdrop-filter: blur(20px);
-            position: sticky;
-            top: 0;
-            z-index: 10;
             flex-shrink: 0;
         }
 
@@ -109,6 +105,9 @@
             font-size: 16px;
             font-weight: 600;
             color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .header .info .status {
@@ -118,6 +117,11 @@
 
         .header .info .status.online {
             color: #06B6D4;
+        }
+
+        .header .info .status.typing {
+            color: #06B6D4;
+            font-style: italic;
         }
 
         .header .actions {
@@ -138,6 +142,106 @@
 
         .header .actions button:hover {
             background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* ─── BLOCKED BANNER ──────────────────────────────────────── */
+        .blocked-banner {
+            padding: 12px 16px;
+            background: rgba(239, 68, 68, 0.1);
+            border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .blocked-banner.show { display: flex; }
+        .blocked-banner i { color: #ef4444; font-size: 16px; }
+        .blocked-banner span {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+        }
+
+        /* ─── CHAT DISABLED ──────────────────────────────────────── */
+        .chat-disabled {
+            padding: 8px 16px;
+            background: rgba(245, 158, 11, 0.15);
+            border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .chat-disabled.show { display: flex; }
+        .chat-disabled i { color: #f59e0b; font-size: 16px; }
+        .chat-disabled span {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+        }
+
+        /* ─── PINNED BANNER ──────────────────────────────────────── */
+        .pinned-banner {
+            padding: 10px 16px;
+            background: rgba(26, 16, 60, 0.9);
+            border-bottom: 1px solid rgba(255, 165, 0, 0.3);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .pinned-banner.show { display: flex; }
+        .pinned-banner i { color: rgba(255, 165, 0, 0.8); font-size: 16px; }
+        .pinned-banner .text {
+            flex: 1;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .pinned-banner .close-pin {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        /* ─── TYPING INDICATOR ────────────────────────────────────── */
+        .typing-indicator {
+            padding: 6px 16px 10px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .typing-indicator.show { display: flex; }
+        .typing-indicator .dots {
+            display: flex;
+            gap: 4px;
+        }
+        .typing-indicator .dots span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #8B5CF6;
+            animation: dotPulse 1.4s ease-in-out infinite;
+        }
+        .typing-indicator .dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator .dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotPulse {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1); }
+        }
+        .typing-indicator .label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            font-style: italic;
         }
 
         /* ─── MESSAGES ───────────────────────────────────────────── */
@@ -393,12 +497,7 @@
             cursor: pointer;
             padding: 8px;
             border-radius: 12px;
-            transition: background 0.3s ease;
             align-self: center;
-        }
-
-        .input-area .attach-btn:hover {
-            background: rgba(255, 255, 255, 0.05);
         }
 
         .input-area .emoji-btn {
@@ -442,7 +541,6 @@
             color: rgba(255, 255, 255, 0.2);
         }
 
-        /* ─── ACTION BUTTON (SEND/MIC) ──────────────────────────── */
         .input-area .action-btn {
             width: 44px;
             height: 44px;
@@ -459,23 +557,11 @@
             background: linear-gradient(135deg, #8B5CF6, #06B6D4);
         }
 
-        .input-area .action-btn:hover {
-            transform: scale(1.05);
-        }
-
-        .input-area .action-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            transform: none;
-        }
-
+        .input-area .action-btn:hover { transform: scale(1.05); }
+        .input-area .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .input-area .action-btn.recording {
             background: #ef4444;
             animation: pulse 1s ease-in-out infinite;
-        }
-
-        .input-area .action-btn.hidden {
-            display: none;
         }
 
         @keyframes pulse {
@@ -497,13 +583,7 @@
         }
 
         .emoji-picker.open { display: block; }
-
-        .emoji-picker .emojis {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
+        .emoji-picker .emojis { display: flex; flex-wrap: wrap; gap: 4px; }
         .emoji-picker .emojis span {
             font-size: 28px;
             cursor: pointer;
@@ -511,10 +591,7 @@
             border-radius: 8px;
             transition: background 0.2s ease;
         }
-
-        .emoji-picker .emojis span:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
+        .emoji-picker .emojis span:hover { background: rgba(255, 255, 255, 0.05); }
 
         /* ─── RECORDING INDICATOR ────────────────────────────────── */
         .recording-indicator {
@@ -529,7 +606,6 @@
         }
 
         .recording-indicator.show { display: flex; }
-
         .recording-indicator .dot {
             width: 10px;
             height: 10px;
@@ -537,13 +613,11 @@
             background: #ef4444;
             animation: pulse 1s ease-in-out infinite;
         }
-
         .recording-indicator .time {
             color: #ef4444;
             font-weight: 600;
             font-size: 14px;
         }
-
         .recording-indicator .cancel {
             margin-left: auto;
             background: none;
@@ -552,7 +626,6 @@
             font-size: 20px;
             cursor: pointer;
         }
-
         .recording-indicator .send-recording {
             background: linear-gradient(135deg, #8B5CF6, #06B6D4);
             border: none;
@@ -562,30 +635,6 @@
             font-weight: 600;
             cursor: pointer;
             font-size: 12px;
-        }
-
-        /* ─── SCROLLBAR ──────────────────────────────────────────── */
-        .messages::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .messages::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .messages::-webkit-scrollbar-thumb {
-            background: rgba(139, 92, 246, 0.3);
-            border-radius: 2px;
-        }
-
-        /* ─── RESPONSIVE ──────────────────────────────────────────── */
-        @media (max-width: 640px) {
-            .app { max-width: 100%; }
-            .header { padding: 8px 12px; }
-            .msg { max-width: 92%; }
-            .msg .bubble { font-size: 13px; padding: 8px 12px; }
-            .messages { padding: 12px; }
-            .input-area { padding: 6px 10px; }
         }
 
         .loading-spinner {
@@ -599,6 +648,15 @@
         }
 
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 640px) {
+            .app { max-width: 100%; }
+            .header { padding: 8px 12px; }
+            .msg { max-width: 92%; }
+            .msg .bubble { font-size: 13px; padding: 8px 12px; }
+            .messages { padding: 12px; }
+            .input-area { padding: 6px 10px; }
+        }
     </style>
 </head>
 <body>
@@ -620,9 +678,36 @@
                 <div class="status" id="chatStatus">Loading...</div>
             </div>
             <div class="actions">
-                <button onclick="window.location.href='/search.html'"><i class="fas fa-search"></i></button>
+                <button onclick="searchMessages()"><i class="fas fa-search"></i></button>
                 <button onclick="openMenu()"><i class="fas fa-ellipsis-v"></i></button>
             </div>
+        </div>
+
+        <!-- ─── BLOCKED BANNER ────────────────────────────────────── -->
+        <div class="blocked-banner" id="blockedBanner">
+            <i class="fas fa-ban"></i>
+            <span id="blockedText">You blocked this user</span>
+        </div>
+
+        <!-- ─── CHAT DISABLED ────────────────────────────────────── -->
+        <div class="chat-disabled" id="chatDisabled">
+            <i class="fas fa-lock"></i>
+            <span>Only admins can send messages</span>
+        </div>
+
+        <!-- ─── PINNED BANNER ────────────────────────────────────── -->
+        <div class="pinned-banner" id="pinnedBanner">
+            <i class="fas fa-thumbtack"></i>
+            <span class="text" id="pinnedText">Pinned message</span>
+            <button class="close-pin" onclick="unpinMessage()"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- ─── TYPING INDICATOR ────────────────────────────────── -->
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="dots">
+                <span></span><span></span><span></span>
+            </div>
+            <span class="label">typing...</span>
         </div>
 
         <!-- ─── MESSAGES ───────────────────────────────────────────── -->
@@ -635,7 +720,6 @@
 
         <!-- ─── INPUT AREA ──────────────────────────────────────────── -->
         <div class="input-area" id="inputArea">
-            <!-- Reply Bar -->
             <div class="reply-bar" id="replyBar">
                 <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
                     <div>
@@ -655,8 +739,7 @@
             <div class="input-wrap">
                 <textarea id="messageInput" rows="1" placeholder="Type a message..." oninput="onTextChanged(this)"></textarea>
             </div>
-            
-            <!-- ACTION BUTTON - Toggles between MIC and SEND -->
+
             <button class="action-btn" id="actionBtn" onclick="handleAction()">
                 <i class="fas fa-microphone"></i>
             </button>
@@ -691,7 +774,6 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-        const storage = firebase.storage();
 
         // ─── CLOUDINARY CONFIG ──────────────────────────────────────
         const CLOUDINARY_CLOUD_NAME = 'dn2mwp1lc';
@@ -708,34 +790,43 @@
         let recordedChunks = [];
         let recordingSeconds = 0;
         let recordingTimer = null;
-
-        if (!chatId) {
-            document.getElementById('messages').innerHTML = '<div style="text-align:center;color:red;padding:40px;">No chat selected</div>';
-        }
+        let pinnedMessages = [];
+        let showPinned = true;
+        let isBlocked = false;
+        let iBlockedThem = false;
+        let theyBlockedMe = false;
+        let canSend = true;
+        let isAnnouncementsOnly = false;
+        let otherUserTyping = false;
 
         // ─── DOM REFS ──────────────────────────────────────────────────
         const actionBtn = document.getElementById('actionBtn');
         const messageInput = document.getElementById('messageInput');
         const recordingIndicator = document.getElementById('recordingIndicator');
         const recordingTime = document.getElementById('recordingTime');
+        const pinnedBanner = document.getElementById('pinnedBanner');
+        const pinnedText = document.getElementById('pinnedText');
+        const messagesEl = document.getElementById('messages');
+        const chatNameEl = document.getElementById('chatName');
+        const chatStatusEl = document.getElementById('chatStatus');
+        const chatAvatarEl = document.getElementById('chatAvatar');
+        const blockedBanner = document.getElementById('blockedBanner');
+        const blockedText = document.getElementById('blockedText');
+        const chatDisabled = document.getElementById('chatDisabled');
+        const typingIndicator = document.getElementById('typingIndicator');
 
         // ─── TEXT CHANGE HANDLER ──────────────────────────────────────
         function onTextChanged(el) {
             const hasText = el.value.trim().length > 0;
-            
             if (hasText) {
-                // Show SEND button
                 actionBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
                 actionBtn.classList.remove('recording');
                 actionBtn.title = 'Send message';
             } else {
-                // Show MIC button
                 actionBtn.innerHTML = '<i class="fas fa-microphone"></i>';
                 actionBtn.classList.remove('recording');
                 actionBtn.title = 'Hold to record voice message';
             }
-            
-            // Auto-resize
             el.style.height = 'auto';
             el.style.height = Math.min(el.scrollHeight, 100) + 'px';
         }
@@ -743,12 +834,9 @@
         // ─── HANDLE ACTION BUTTON ────────────────────────────────────
         function handleAction() {
             const hasText = messageInput.value.trim().length > 0;
-            
             if (hasText) {
-                // Send text message
                 sendMessage();
             } else {
-                // Toggle recording
                 if (isRecording) {
                     stopRecording();
                 } else {
@@ -757,41 +845,56 @@
             }
         }
 
+        // ─── LOCAL STORAGE HELPERS ────────────────────────────────────
+        function getLocal(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+
         // ─── AUTH ──────────────────────────────────────────────────────
+        function getUserId() {
+            const user = auth.currentUser;
+            if (user) return user.uid;
+            return getLocal('mock_user_id') || null;
+        }
+
         auth.onAuthStateChanged(function(user) {
-            if (user) {
-                currentUserId = user.uid;
+            const id = getUserId();
+            if (id) {
+                currentUserId = id;
+                console.log('✅ User found:', currentUserId);
                 loadChat();
             } else {
-                const mockUser = localStorage.getItem('aura_user');
-                if (mockUser) {
-                    currentUserId = mockUser;
-                    loadChat();
-                } else {
-                    window.location.href = '/email_verification.html';
-                }
+                messagesEl.innerHTML = `
+                    <div style="text-align:center;color:rgba(255,255,255,0.3);padding:40px 0;">
+                        <i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;"></i>
+                        Not signed in<br/>
+                        <span style="font-size:13px;">Please sign in to view messages</span>
+                    </div>
+                `;
             }
         });
 
         // ─── LOAD CHAT ─────────────────────────────────────────────────
         async function loadChat() {
-            if (!chatId) return;
+            if (!chatId || !currentUserId) return;
 
             try {
                 const doc = await db.collection('chats').doc(chatId).get();
                 if (!doc.exists) {
-                    document.getElementById('messages').innerHTML = '<div style="text-align:center;color:red;padding:40px;">Chat not found</div>';
+                    messagesEl.innerHTML = '<div style="text-align:center;color:red;padding:40px;">Chat not found</div>';
                     return;
                 }
 
                 chatData = doc.data();
-                const isGroup = chatData.type === 'group' || chatData.type === 'channel';
                 const participants = chatData.participants || [];
+                const isGroup = chatData.type === 'group' || chatData.type === 'channel';
+                const chatType = chatData.type || 'direct';
 
+                // Get chat name and avatar
                 let chatName = chatData.name || 'Chat';
                 let chatAvatar = chatData.avatar_url || null;
 
-                if (!isGroup) {
+                if (!isGroup && chatType === 'direct') {
                     const otherId = participants.find(id => id !== currentUserId);
                     if (otherId) {
                         const userDoc = await db.collection('users').doc(otherId).get();
@@ -803,28 +906,128 @@
                     }
                 }
 
-                document.getElementById('chatName').textContent = chatName;
-                const avatarEl = document.getElementById('chatAvatar');
+                // Update header
+                chatNameEl.textContent = chatName;
                 if (chatAvatar) {
-                    avatarEl.innerHTML = `<img src="${chatAvatar}" />`;
+                    chatAvatarEl.innerHTML = `<img src="${chatAvatar}" />`;
                 } else {
-                    avatarEl.innerHTML = `<i class="fas ${isGroup ? 'fa-users' : 'fa-user'}"></i>`;
+                    chatAvatarEl.innerHTML = `<i class="fas ${isGroup ? 'fa-users' : 'fa-user'}"></i>`;
                 }
 
-                document.getElementById('chatStatus').textContent = 'Online';
-                document.getElementById('chatStatus').className = 'status online';
+                // Check block status
+                await checkBlockStatus();
 
+                // Load settings
+                const settings = chatData.settings || {};
+                const myRole = chatData.participants_data?.[currentUserId]?.role || 'member';
+                const isAdmin = myRole === 'owner' || myRole === 'admin';
+                canSend = !(settings.chat_disabled && !isAdmin);
+                isAnnouncementsOnly = settings.announcements_only && !isAdmin;
+
+                if (!canSend || isAnnouncementsOnly) {
+                    chatDisabled.classList.add('show');
+                }
+
+                // Load pinned messages
+                await loadPinnedMessages();
+
+                // Load messages
                 loadMessages();
+
+                // Listen to chat updates
+                listenToChatUpdates();
+
+                // Set online status
+                setOnlineStatus();
 
             } catch (e) {
                 console.error('Load chat error:', e);
+                messagesEl.innerHTML = `<div style="text-align:center;color:red;padding:40px;">Error: ${e.message}</div>`;
             }
+        }
+
+        // ─── CHECK BLOCK STATUS ──────────────────────────────────────
+        async function checkBlockStatus() {
+            try {
+                const participants = chatData.participants || [];
+                const otherId = participants.find(id => id !== currentUserId);
+                if (!otherId) return;
+
+                const currentUserDoc = await db.collection('users').doc(currentUserId).get();
+                const otherUserDoc = await db.collection('users').doc(otherId).get();
+
+                const myBlocked = currentUserDoc.data()?.blocked_users || [];
+                const theirBlocked = otherUserDoc.data()?.blocked_users || [];
+
+                iBlockedThem = myBlocked.includes(otherId);
+                theyBlockedMe = theirBlocked.includes(currentUserId);
+                isBlocked = iBlockedThem || theyBlockedMe;
+
+                if (isBlocked) {
+                    blockedBanner.classList.add('show');
+                    blockedText.textContent = iBlockedThem ? 'You blocked this user' : 'This user blocked you';
+                }
+            } catch (e) {
+                console.error('Block check error:', e);
+            }
+        }
+
+        // ─── LOAD PINNED MESSAGES ────────────────────────────────────
+        async function loadPinnedMessages() {
+            try {
+                const snapshot = await db.collection('chats')
+                    .doc(chatId)
+                    .collection('pinned_messages')
+                    .orderBy('pinned_at', 'desc')
+                    .limit(3)
+                    .get();
+
+                pinnedMessages = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    message_id: doc.data().message_id,
+                    ...doc.data()
+                }));
+
+                if (pinnedMessages.length > 0 && showPinned) {
+                    const msgDoc = await db.collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .doc(pinnedMessages[0].message_id)
+                        .get();
+
+                    if (msgDoc.exists) {
+                        const data = msgDoc.data();
+                        pinnedText.textContent = data.text || data.content || 'Pinned message';
+                        pinnedBanner.classList.add('show');
+                    }
+                }
+            } catch (e) {
+                console.error('Load pinned error:', e);
+            }
+        }
+
+        // ─── LISTEN TO CHAT UPDATES ──────────────────────────────────
+        function listenToChatUpdates() {
+            db.collection('chats').doc(chatId).onSnapshot((doc) => {
+                if (doc.exists) {
+                    chatData = doc.data();
+                    const settings = chatData.settings || {};
+                    const myRole = chatData.participants_data?.[currentUserId]?.role || 'member';
+                    const isAdmin = myRole === 'owner' || myRole === 'admin';
+                    canSend = !(settings.chat_disabled && !isAdmin);
+                    isAnnouncementsOnly = settings.announcements_only && !isAdmin;
+
+                    if (!canSend || isAnnouncementsOnly) {
+                        chatDisabled.classList.add('show');
+                    } else {
+                        chatDisabled.classList.remove('show');
+                    }
+                }
+            });
         }
 
         // ─── LOAD MESSAGES ────────────────────────────────────────────
         function loadMessages() {
-            const messagesEl = document.getElementById('messages');
-
             db.collection('chats').doc(chatId).collection('messages')
                 .where('deleted_for_everyone', '==', false)
                 .orderBy('created_at', 'desc')
@@ -842,6 +1045,7 @@
 
                     let html = '';
                     let lastDate = '';
+                    const messages = [];
 
                     snapshot.docs.forEach((doc) => {
                         const msg = doc.data();
@@ -850,14 +1054,25 @@
                         const msgDate = msg.created_at ? new Date(msg.created_at.seconds * 1000) : new Date();
                         const dateStr = formatDate(msgDate);
 
-                        if (dateStr !== lastDate) {
-                            html += `<div class="date-divider">${dateStr}</div>`;
-                            lastDate = dateStr;
+                        // Skip deleted for me
+                        const deletedFor = msg.deleted_for || [];
+                        if (deletedFor.includes(currentUserId)) return;
+
+                        messages.push({ ...msg, isMe, msgDate, dateStr });
+                    });
+
+                    // Reverse for chronological order
+                    messages.reverse();
+
+                    messages.forEach((msg) => {
+                        if (msg.dateStr !== lastDate) {
+                            html += `<div class="date-divider">${lastDate || msg.dateStr}</div>`;
+                            lastDate = msg.dateStr;
                         }
 
                         const senderName = msg.sender_name || 'Unknown';
                         const senderAvatar = msg.sender_avatar || '';
-                        const time = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const time = msg.msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         const content = msg.text || msg.content || '';
                         const mediaUrl = msg.media_url || '';
                         const mediaType = msg.media_type || '';
@@ -885,7 +1100,7 @@
                             } else if (mediaType === 'audio' && mediaUrl) {
                                 bubbleContent += `
                                     <div class="voice-note">
-                                        <button class="play-btn" onclick="playAudio('${doc.id}', '${mediaUrl}')">
+                                        <button class="play-btn" onclick="playAudio('${msg.id}', '${mediaUrl}')">
                                             <i class="fas fa-play"></i>
                                         </button>
                                         <span class="duration">${formatDuration(msg.duration || 0)}</span>
@@ -913,7 +1128,7 @@
                         }
 
                         let senderHtml = '';
-                        if (chatData.type === 'group' && !isMe && !isDeleted) {
+                        if (chatData.type === 'group' && !msg.isMe && !isDeleted) {
                             senderHtml = `<span class="sender">${senderName}</span>`;
                         }
 
@@ -928,8 +1143,8 @@
                         }
 
                         html += `
-                            <div class="msg ${isMe ? 'me' : ''}">
-                                ${!isMe ? `<div class="avatar">${senderAvatar ? `<img src="${senderAvatar}" />` : senderName.charAt(0).toUpperCase()}</div>` : ''}
+                            <div class="msg ${msg.isMe ? 'me' : ''}">
+                                ${!msg.isMe ? `<div class="avatar">${senderAvatar ? `<img src="${senderAvatar}" />` : senderName.charAt(0).toUpperCase()}</div>` : ''}
                                 <div class="bubble">
                                     ${senderHtml}
                                     ${bubbleContent}
@@ -949,6 +1164,16 @@
         async function sendMessage() {
             const text = messageInput.value.trim();
             if (!text || !chatId || !currentUserId) return;
+
+            if (isBlocked) {
+                alert('You cannot send messages to this user');
+                return;
+            }
+
+            if (!canSend || isAnnouncementsOnly) {
+                alert('Only admins can send messages in this chat');
+                return;
+            }
 
             const msgData = {
                 chat_id: chatId,
@@ -978,14 +1203,12 @@
                 clearReply();
             } catch (e) {
                 console.error('Send error:', e);
-                alert('Failed to send message');
+                alert('Failed to send message: ' + e.message);
             }
         }
 
         // ─── UPLOAD MEDIA ─────────────────────────────────────────────
         async function uploadMedia(file, type) {
-            if (!chatId || !currentUserId) return;
-
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -1006,6 +1229,11 @@
         // ─── SEND MEDIA MESSAGE ──────────────────────────────────────
         async function sendMediaMessage(file, type) {
             if (!chatId || !currentUserId || !file) return;
+
+            if (isBlocked) {
+                alert('Cannot send media to blocked user');
+                return;
+            }
 
             const fileName = file.name || 'File';
             const fileSize = formatFileSize(file.size);
@@ -1047,7 +1275,7 @@
 
             } catch (e) {
                 console.error('Send media error:', e);
-                alert('Failed to upload file');
+                alert('Failed to upload file: ' + e.message);
                 actionBtn.disabled = false;
                 onTextChanged(messageInput);
             }
@@ -1088,7 +1316,7 @@
 
             } catch (e) {
                 console.error('Recording error:', e);
-                alert('Microphone access denied. Please allow microphone permissions.');
+                alert('Microphone access denied.');
             }
         }
 
@@ -1151,7 +1379,7 @@
 
             } catch (e) {
                 console.error('Send recording error:', e);
-                alert('Failed to send voice message');
+                alert('Failed to send voice message: ' + e.message);
             }
         }
 
@@ -1188,6 +1416,21 @@
             currentAudio.play();
         }
 
+        // ─── UNPIN MESSAGE ────────────────────────────────────────────
+        async function unpinMessage() {
+            if (pinnedMessages.length === 0) return;
+            try {
+                await db.collection('chats').doc(chatId)
+                    .collection('pinned_messages')
+                    .doc(pinnedMessages[0].id)
+                    .delete();
+                pinnedBanner.classList.remove('show');
+                showPinned = false;
+            } catch (e) {
+                console.error('Unpin error:', e);
+            }
+        }
+
         // ─── HELPERS ──────────────────────────────────────────────────
         function formatDate(date) {
             const today = new Date();
@@ -1214,6 +1457,15 @@
         function formatText(text) {
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             return text.replace(urlRegex, (url) => `<a href="${url}" target="_blank" style="color:#8B5CF6;text-decoration:underline;">${url}</a>`);
+        }
+
+        function setOnlineStatus() {
+            if (!currentUserId) return;
+            db.collection('users').doc(currentUserId).update({
+                status: 'Online',
+                last_seen: firebase.firestore.FieldValue.serverTimestamp(),
+                is_online: true
+            }).catch(() => {});
         }
 
         // ─── REPLY ────────────────────────────────────────────────────
@@ -1260,8 +1512,30 @@
             }
         });
 
-        // ─── INIT ─────────────────────────────────────────────────────
-        console.log('💬 AURA Chat — Chat Screen (Real)');
+        // ─── OPEN MENU ────────────────────────────────────────────────
+        function openMenu() {
+            alert('Chat menu options coming soon');
+        }
+
+        // ─── SEARCH ────────────────────────────────────────────────────
+        function searchMessages() {
+            const query = prompt('Search messages:');
+            if (query && query.trim()) {
+                // Simple search highlight
+                const msgs = document.querySelectorAll('.msg .bubble');
+                msgs.forEach(el => {
+                    const text = el.textContent.toLowerCase();
+                    if (text.includes(query.toLowerCase())) {
+                        el.style.background = 'rgba(139,92,246,0.2)';
+                        setTimeout(() => {
+                            el.style.background = '';
+                        }, 3000);
+                    }
+                });
+            }
+        }
+
+        console.log('💬 AURA Chat — Chat Screen (Full)');
     </script>
 
 </body>
