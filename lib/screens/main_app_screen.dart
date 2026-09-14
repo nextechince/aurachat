@@ -48,8 +48,6 @@ class _MainAppScreenState extends State<MainAppScreen>
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuraAuthProvider>(context);
-
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
@@ -101,7 +99,8 @@ class _MainAppScreenState extends State<MainAppScreen>
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.search, color: Colors.white70),
-                    onPressed: () => Navigator.pushNamed(context, '/global_search'),
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/global_search'),
                   ),
                   IconButton(
                     icon: const Icon(Icons.more_vert, color: Colors.white70),
@@ -117,7 +116,8 @@ class _MainAppScreenState extends State<MainAppScreen>
                     borderRadius: BorderRadius.circular(20),
                   ),
                   indicatorSize: TabBarIndicatorSize.tab,
-                  indicatorPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  indicatorPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   labelColor: Colors.white,
                   unselectedLabelColor: Colors.white.withOpacity(0.4),
                   labelStyle: const TextStyle(
@@ -154,77 +154,47 @@ class _MainAppScreenState extends State<MainAppScreen>
   Widget? _buildFAB() {
     switch (_currentIndex) {
       case 0:
-        return Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF8B5CF6).withOpacity(0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: FloatingActionButton(
-            onPressed: () => _showNewChatOptions(context),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: const Icon(Icons.chat_bubble, color: Colors.white),
-          ),
+        return _glowFAB(
+          icon: Icons.chat_bubble,
+          onPressed: () => _showNewChatOptions(context),
         );
-
       case 1:
-        return Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF8B5CF6).withOpacity(0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: FloatingActionButton(
-            onPressed: () => _showAddStatusOptions(context),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: const Icon(Icons.camera_alt, color: Colors.white),
-          ),
+        return _glowFAB(
+          icon: Icons.camera_alt,
+          onPressed: () => _showAddStatusOptions(context),
         );
-
       case 2:
-        return Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF8B5CF6).withOpacity(0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: FloatingActionButton(
-            onPressed: () => _showNewCallOptions(context),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: const Icon(Icons.add_call, color: Colors.white),
-          ),
+        return _glowFAB(
+          icon: Icons.add_call,
+          onPressed: () => _showNewCallOptions(context),
         );
-
       default:
         return null;
     }
+  }
+
+  Widget _glowFAB({required IconData icon, required VoidCallback onPressed}) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF8B5CF6).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: FloatingActionButton(
+        onPressed: onPressed,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Icon(icon, color: Colors.white),
+      ),
+    );
   }
 
   Widget _buildChatsTab() {
@@ -285,20 +255,18 @@ class _MainAppScreenState extends State<MainAppScreen>
     final name = chat['name'] ?? 'Unknown';
     final avatar = chat['avatar_url'];
     final lastMessage = chat['last_message'] ?? '';
-    final time = chat['updated_at'];
     final unread = chat['unread_count'] ?? 0;
     final chatType = chat['type'] as String? ?? 'direct';
     final isGroup = chatType == 'group';
     final isChannel = chatType == 'channel';
+    final isBot = chatType == 'bot' || chat['is_bot'] == true;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.03),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.05),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -318,7 +286,13 @@ class _MainAppScreenState extends State<MainAppScreen>
             backgroundImage: avatar != null ? NetworkImage(avatar) : null,
             child: avatar == null
                 ? Icon(
-                    isChannel ? Icons.campaign : isGroup ? Icons.group : Icons.person,
+                    isChannel
+                        ? Icons.campaign
+                        : isGroup
+                            ? Icons.group
+                            : isBot
+                                ? Icons.smart_toy
+                                : Icons.person,
                     color: const Color(0xFF8B5CF6),
                     size: 20,
                   )
@@ -339,45 +313,9 @@ class _MainAppScreenState extends State<MainAppScreen>
               ),
             ),
             if (isChannel)
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'CHANNEL',
-                    style: TextStyle(
-                      color: Color(0xFF8B5CF6),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
-            if (isGroup)
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF06B6D4).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'GROUP',
-                    style: TextStyle(
-                      color: Color(0xFF06B6D4),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ),
+              _pill('CHANNEL', const Color(0xFF8B5CF6)),
+            if (isGroup) _pill('GROUP', const Color(0xFF06B6D4)),
+            if (isBot) _pill('BOT', const Color(0xFF8B5CF6)),
           ],
         ),
         subtitle: Text(
@@ -393,14 +331,13 @@ class _MainAppScreenState extends State<MainAppScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (time != null)
-              Text(
-                _formatTime(time),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.3),
-                  fontSize: 11,
-                ),
+            Text(
+              'Now',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.3),
+                fontSize: 11,
               ),
+            ),
             if (unread > 0) ...[
               const SizedBox(height: 4),
               Container(
@@ -433,6 +370,16 @@ class _MainAppScreenState extends State<MainAppScreen>
                 'channelName': name,
               },
             );
+          } else if (isBot) {
+            // Bot chat — bot.html equivalent
+            Navigator.pushNamed(
+              context,
+              '/bot',
+              arguments: {
+                'chatId': chat['id'],
+                'botName': name,
+              },
+            );
           } else {
             Navigator.pushNamed(
               context,
@@ -446,6 +393,28 @@ class _MainAppScreenState extends State<MainAppScreen>
             );
           }
         },
+      ),
+    );
+  }
+
+  Widget _pill(String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: color,
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
       ),
     );
   }
@@ -477,6 +446,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  NEW CHAT BOTTOM SHEET (FAB + button)
+  // ═══════════════════════════════════════════════════════════════
   void _showNewChatOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -489,14 +461,7 @@ class _MainAppScreenState extends State<MainAppScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            _handle(),
             const SizedBox(height: 20),
             _buildOptionTile(
               icon: Icons.person_add,
@@ -514,7 +479,6 @@ class _MainAppScreenState extends State<MainAppScreen>
                 Navigator.pushNamed(context, '/create_group');
               },
             ),
-            // FIX #17: Separate route for channel creation
             _buildOptionTile(
               icon: Icons.campaign,
               label: AppLocalizations.get('new_channel'),
@@ -529,6 +493,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  STATUS BOTTOM SHEET
+  // ═══════════════════════════════════════════════════════════════
   void _showAddStatusOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -541,35 +508,22 @@ class _MainAppScreenState extends State<MainAppScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            _handle(),
             const SizedBox(height: 20),
             _buildOptionTile(
               icon: Icons.camera_alt,
               label: AppLocalizations.get('camera'),
-              onTap: () {
-                Navigator.pop(context);
-              },
+              onTap: () => Navigator.pop(context),
             ),
             _buildOptionTile(
               icon: Icons.photo_library,
               label: AppLocalizations.get('gallery'),
-              onTap: () {
-                Navigator.pop(context);
-              },
+              onTap: () => Navigator.pop(context),
             ),
             _buildOptionTile(
               icon: Icons.text_fields,
               label: AppLocalizations.get('text_status'),
-              onTap: () {
-                Navigator.pop(context);
-              },
+              onTap: () => Navigator.pop(context),
             ),
           ],
         ),
@@ -577,6 +531,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  NEW CALL BOTTOM SHEET
+  // ═══════════════════════════════════════════════════════════════
   void _showNewCallOptions(BuildContext context) {
     final channelName = CallService.generateChannelName();
 
@@ -591,16 +548,8 @@ class _MainAppScreenState extends State<MainAppScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            _handle(),
             const SizedBox(height: 20),
-
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -612,7 +561,8 @@ class _MainAppScreenState extends State<MainAppScreen>
                 children: [
                   Text(
                     'Share this code to join',
-                    style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.6), fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
@@ -628,7 +578,6 @@ class _MainAppScreenState extends State<MainAppScreen>
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
             _buildOptionTile(
               icon: Icons.person_search,
@@ -637,9 +586,7 @@ class _MainAppScreenState extends State<MainAppScreen>
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const CallScreen.pick(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CallScreen.pick()),
                 );
               },
             ),
@@ -651,7 +598,7 @@ class _MainAppScreenState extends State<MainAppScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => CallScreen.active(
+                    builder: (_) => CallScreen.active(
                       channelName: channelName,
                       isVideoCall: false,
                       targetUserId: 'unknown',
@@ -669,7 +616,7 @@ class _MainAppScreenState extends State<MainAppScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => CallScreen.active(
+                    builder: (_) => CallScreen.active(
                       channelName: channelName,
                       isVideoCall: true,
                       targetUserId: 'unknown',
@@ -695,16 +642,12 @@ class _MainAppScreenState extends State<MainAppScreen>
 
   void _showCallCodeDialog(BuildContext context) {
     final codeController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1a103c),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Join Call',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Join Call', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: codeController,
           style: const TextStyle(color: Colors.white),
@@ -715,23 +658,13 @@ class _MainAppScreenState extends State<MainAppScreen>
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF8B5CF6)),
-            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white.withOpacity(0.5)),
-            ),
+            child: Text('Cancel',
+                style: TextStyle(color: Colors.white.withOpacity(0.5))),
           ),
           ElevatedButton(
             onPressed: () {
@@ -741,7 +674,7 @@ class _MainAppScreenState extends State<MainAppScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => CallScreen.active(
+                    builder: (_) => CallScreen.active(
                       channelName: code,
                       isVideoCall: true,
                       targetUserId: 'unknown',
@@ -754,9 +687,6 @@ class _MainAppScreenState extends State<MainAppScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF8B5CF6),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
             ),
             child: const Text('Join'),
           ),
@@ -765,6 +695,10 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  ⋮ MENU  —  matches chats.html
+  //  Items: Saved Messages · Settings · Profile · BotCreator · Log Out
+  // ═══════════════════════════════════════════════════════════════
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -772,50 +706,175 @@ class _MainAppScreenState extends State<MainAppScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(2),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _handle(),
+                const SizedBox(height: 18),
+
+                // ─── Saved Messages ─────────────────────────────
+                _menuTile(
+                  icon: Icons.bookmark,
+                  iconColor: const Color(0xFF8B5CF6),
+                  label: 'Saved Messages',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(context, '/saved_messages');
+                  },
+                ),
+
+                // ─── Settings ───────────────────────────────────
+                _menuTile(
+                  icon: Icons.settings,
+                  iconColor: const Color(0xFF8B5CF6),
+                  label: 'Settings',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                ),
+
+                // ─── Profile ────────────────────────────────────
+                _menuTile(
+                  icon: Icons.person,
+                  iconColor: const Color(0xFF06B6D4),
+                  label: 'Profile',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(context, '/profile');
+                  },
+                ),
+
+                // ─── BotCreator ─────────────────────────────────
+                _menuTile(
+                  icon: Icons.smart_toy,
+                  iconColor: const Color(0xFF8B5CF6),
+                  label: 'BotCreator',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(context, '/bot_creator');
+                  },
+                ),
+
+                // ─── Log Out ────────────────────────────────────
+                _menuTile(
+                  icon: Icons.logout,
+                  iconColor: const Color(0xFFEF4444),
+                  label: 'Log Out',
+                  labelColor: const Color(0xFFEF4444),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await _confirmSignOut(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _menuTile({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required VoidCallback onTap,
+    Color? labelColor,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
               ),
-            ),
-            const SizedBox(height: 20),
-            _buildOptionTile(
-              icon: Icons.settings,
-              label: AppLocalizations.get('settings'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, '/settings');
-              },
-            ),
-            _buildOptionTile(
-              icon: Icons.person,
-              label: AppLocalizations.get('profile'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, '/profile');
-              },
-            ),
-            _buildOptionTile(
-              icon: Icons.logout,
-              label: AppLocalizations.get('sign_out'),
-              color: Colors.red,
-              onTap: () async {
-                Navigator.pop(context);
-                final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
-                await authProvider.signOut();
-                if (context.mounted) {
-                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-                }
-              },
-            ),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: labelColor ?? Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1a103c),
+        title: const Text('Log out?', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'You will need to sign in again to use AURA Chat.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: TextStyle(color: Colors.white.withOpacity(0.5))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (!context.mounted) return;
+
+    final authProvider =
+        Provider.of<AuraAuthProvider>(context, listen: false);
+    try {
+      await authProvider.signOut();
+    } catch (_) {}
+
+    if (context.mounted) {
+      // Route back to the root — AuthRouter will re-evaluate
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil('/', (route) => false);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  Shared UI helpers
+  // ═══════════════════════════════════════════════════════════════
+  Widget _handle() {
+    return Center(
+      child: Container(
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(2),
         ),
       ),
     );
@@ -836,15 +895,8 @@ class _MainAppScreenState extends State<MainAppScreen>
         ),
         child: Icon(icon, color: color),
       ),
-      title: Text(
-        label,
-        style: const TextStyle(color: Colors.white),
-      ),
+      title: Text(label, style: const TextStyle(color: Colors.white)),
       onTap: onTap,
     );
-  }
-
-  String _formatTime(dynamic time) {
-    return 'Now';
   }
 }
