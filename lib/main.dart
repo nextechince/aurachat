@@ -23,8 +23,10 @@ import 'screens/auth/email_verification_screen.dart';
 import 'screens/auth/setup_profile_screen.dart';
 import 'screens/main_app_screen.dart';
 import 'screens/chat/chat_screen.dart';
-import 'screens/bot/bot_store_screen.dart';
+import 'screens/bot/bot_chat_screen.dart';
 import 'screens/bot/bot_creator_screen.dart';
+import 'screens/bot/bot_profile_screen.dart';
+// NOTE: bot_store_screen.dart was deleted — its import and route were removed.
 import 'screens/settings/privacy_settings_screen.dart';
 import 'screens/settings/security_screen.dart';
 import 'screens/settings/blocked_users_screen.dart';
@@ -163,14 +165,21 @@ class ErrorApp extends StatelessWidget {
                 const Icon(Icons.error_outline, color: Colors.red, size: 64),
                 const SizedBox(height: 24),
                 const Text('AURA Chat Error',
-                  style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 const Text(
                   'The app failed to start. Please screenshot this and send it to support email for help.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
                 const SizedBox(height: 32),
                 const Text('ERROR:',
-                  style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Container(
                   width: double.infinity,
@@ -181,12 +190,18 @@ class ErrorApp extends StatelessWidget {
                     border: Border.all(color: Colors.red.withOpacity(0.3)),
                   ),
                   child: Text(error,
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 14, fontFamily: 'monospace')),
+                      style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 14,
+                          fontFamily: 'monospace')),
                 ),
                 if (stack != null) ...[
                   const SizedBox(height: 24),
                   const Text('STACK TRACE:',
-                    style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -196,7 +211,10 @@ class ErrorApp extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(stack!,
-                      style: const TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'monospace')),
+                        style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 10,
+                            fontFamily: 'monospace')),
                   ),
                 ],
               ],
@@ -209,7 +227,7 @@ class ErrorApp extends StatelessWidget {
 }
 
 // ============================================================================
-// AUTH ROUTER — FIXED: Shows SplashScreen first, then routes correctly
+// AUTH ROUTER — SplashScreen → route by auth state
 // ============================================================================
 class AuthRouter extends StatefulWidget {
   const AuthRouter({super.key});
@@ -226,7 +244,6 @@ class _AuthRouterState extends State<AuthRouter> {
   @override
   void initState() {
     super.initState();
-    // Show splash for 2.5 seconds, then check auth
     Future.delayed(const Duration(milliseconds: 2500), () {
       if (mounted) {
         setState(() => _showSplash = false);
@@ -238,14 +255,14 @@ class _AuthRouterState extends State<AuthRouter> {
   Future<void> _checkAuthState() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Check for pending email verification (from email-first login)
     final pendingMockUserId = prefs.getString('pending_mock_user_id');
     final pendingMockEmail = prefs.getString('pending_mock_email');
-    final emailVerifiedComplete = prefs.getBool('email_verified_complete') ?? false;
+    final emailVerifiedComplete =
+        prefs.getBool('email_verified_complete') ?? false;
 
-    // FIXED: If there's a pending verification but email is NOT yet verified,
-    // show email verification screen
-    if (pendingMockUserId != null && pendingMockEmail != null && !emailVerifiedComplete) {
+    if (pendingMockUserId != null &&
+        pendingMockEmail != null &&
+        !emailVerifiedComplete) {
       setState(() {
         _targetScreen = const EmailVerificationScreen();
         _isChecking = false;
@@ -253,13 +270,17 @@ class _AuthRouterState extends State<AuthRouter> {
       return;
     }
 
-    // Check for old-style pending email verification
     final oldPendingEmailUserId = prefs.getString('pending_email_user_id');
-    final oldPendingEmailVerification = prefs.getBool('pending_email_verification') ?? false;
-    final oldPendingEmailTimestamp = prefs.getInt('pending_email_timestamp');
+    final oldPendingEmailVerification =
+        prefs.getBool('pending_email_verification') ?? false;
+    final oldPendingEmailTimestamp =
+        prefs.getInt('pending_email_timestamp');
 
-    if (oldPendingEmailUserId != null && oldPendingEmailVerification && oldPendingEmailTimestamp != null) {
-      final emailAge = DateTime.now().millisecondsSinceEpoch - oldPendingEmailTimestamp;
+    if (oldPendingEmailUserId != null &&
+        oldPendingEmailVerification &&
+        oldPendingEmailTimestamp != null) {
+      final emailAge = DateTime.now().millisecondsSinceEpoch -
+          oldPendingEmailTimestamp;
       if (emailAge < 30 * 60 * 1000) {
         setState(() {
           _targetScreen = const EmailVerificationScreen();
@@ -273,15 +294,12 @@ class _AuthRouterState extends State<AuthRouter> {
       }
     }
 
-    // Check for authenticated user (Firebase or mock)
     final currentUser = FirebaseAuth.instance.currentUser;
     final mockUserId = prefs.getString('mock_user_id');
 
     if (currentUser != null || mockUserId != null) {
       final userId = currentUser?.uid ?? mockUserId!;
 
-      // FIXED: Check if user has a COMPLETE profile in Firestore
-      // A complete profile needs username AND display_name AND they must be non-empty
       try {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -289,30 +307,28 @@ class _AuthRouterState extends State<AuthRouter> {
             .get();
 
         final data = userDoc.data();
-        final hasUsername = data?['username'] != null && (data?['username'] as String).trim().isNotEmpty;
-        final hasDisplayName = data?['display_name'] != null && (data?['display_name'] as String).trim().isNotEmpty;
-        final hasProfile = userDoc.exists && hasUsername && hasDisplayName;
+        final hasUsername = data?['username'] != null &&
+            (data?['username'] as String).trim().isNotEmpty;
+        final hasDisplayName = data?['display_name'] != null &&
+            (data?['display_name'] as String).trim().isNotEmpty;
+        final hasProfile =
+            userDoc.exists && hasUsername && hasDisplayName;
 
-        // FIXED: Also check if this is a brand new user who hasn't completed setup
-        // by checking a 'setup_complete' flag or checking if created_at is very recent
         final createdAt = data?['created_at'];
         final bool isVeryNew = createdAt == null;
 
         if (hasProfile && !isVeryNew) {
-          // Existing user with complete profile -> go to main
           setState(() {
             _targetScreen = const MainAppScreen();
             _isChecking = false;
           });
         } else {
-          // New user or incomplete profile -> go to setup
           setState(() {
             _targetScreen = const SetupProfileScreen();
             _isChecking = false;
           });
         }
       } catch (e) {
-        // If Firestore check fails, default to setup (safer for new users)
         setState(() {
           _targetScreen = const SetupProfileScreen();
           _isChecking = false;
@@ -321,7 +337,6 @@ class _AuthRouterState extends State<AuthRouter> {
       return;
     }
 
-    // No user logged in -> show email verification screen (new entry point)
     setState(() {
       _targetScreen = const EmailVerificationScreen();
       _isChecking = false;
@@ -330,7 +345,6 @@ class _AuthRouterState extends State<AuthRouter> {
 
   @override
   Widget build(BuildContext context) {
-    // FIXED: Show splash screen first
     if (_showSplash) {
       return const SplashScreen();
     }
@@ -338,7 +352,8 @@ class _AuthRouterState extends State<AuthRouter> {
     if (_isChecking) {
       return const Scaffold(
         backgroundColor: Color(0xFF0A0A0F),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF8B5CF6))),
+        body:
+            Center(child: CircularProgressIndicator(color: Color(0xFF8B5CF6))),
       );
     }
     return _targetScreen!;
@@ -411,23 +426,26 @@ class AuraChatApp extends StatefulWidget {
   State<AuraChatApp> createState() => _AuraChatAppState();
 }
 
-class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
+class _AuraChatAppState extends State<AuraChatApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
+      final authProvider =
+          Provider.of<AuraAuthProvider>(context, listen: false);
       authProvider.listenToAuthChanges();
 
-      // FIXED: Start foreground timer for app lock
-      final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+      final settingsProvider =
+          Provider.of<SettingsProvider>(context, listen: false);
       settingsProvider.startForegroundTimer();
 
       PushNotificationService().onChatOpen = (chatId) {
         if (navigatorKey.currentState != null) {
-          navigatorKey.currentState!.pushNamed('/chat', arguments: {'chatId': chatId});
+          navigatorKey.currentState!
+              .pushNamed('/chat', arguments: {'chatId': chatId});
         }
       };
     });
@@ -442,7 +460,8 @@ class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
       _handleBackground();
     } else if (state == AppLifecycleState.resumed) {
       _handleResume();
@@ -453,8 +472,9 @@ class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
     try {
       OnlineStatusService.setOffline();
 
-      final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
-      settingsProvider.stopForegroundTimer(); // FIXED: Stop periodic timer
+      final settingsProvider =
+          Provider.of<SettingsProvider>(context, listen: false);
+      settingsProvider.stopForegroundTimer();
       settingsProvider.onAppBackground();
     } catch (e) {
       debugPrint('Background handler error: $e');
@@ -465,11 +485,12 @@ class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
     try {
       await OnlineStatusService.setOnline();
 
-      final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
+      final authProvider =
+          Provider.of<AuraAuthProvider>(context, listen: false);
       authProvider.refreshSession();
 
-      final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
-      // FIXED: Start foreground timer and check if lock should show
+      final settingsProvider =
+          Provider.of<SettingsProvider>(context, listen: false);
       settingsProvider.startForegroundTimer();
       await settingsProvider.shouldShowLockScreen();
     } catch (e) {
@@ -507,9 +528,36 @@ class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
               '/setup_profile': (context) => const SetupProfileScreen(),
               '/main': (context) => const MainAppScreen(),
               '/chat': (context) => const ChatScreen(),
-              '/bot_store': (context) => const BotStoreScreen(),
-              '/bot_creator': (context) => const BotCreatorScreen(),
-              '/privacy_settings': (context) => const PrivacySettingsScreen(),
+
+              // ─── BOT ROUTES ──────────────────────────────────────
+              '/bot': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments
+                    as Map<String, dynamic>?;
+                return BotChatScreen(
+                  chatId: args?['chatId'] as String? ?? '',
+                  botName: args?['botName'] as String? ?? 'Bot',
+                );
+              },
+              '/bot_profile': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments
+                    as Map<String, dynamic>?;
+                return BotProfileScreen(
+                  botId: args?['botId'] as String? ?? '',
+                  botName: args?['botName'] as String? ?? 'Bot',
+                );
+              },
+              '/bot_creator': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments
+                    as Map<String, dynamic>?;
+                return BotCreatorScreen(
+                  editBotId: args?['editBotId'] as String?,
+                  editUsername: args?['editUsername'] as String?,
+                );
+              },
+              // ─────────────────────────────────────────────────────
+
+              '/privacy_settings': (context) =>
+                  const PrivacySettingsScreen(),
               '/security': (context) => const SecurityScreen(),
               '/blocked_users': (context) => const BlockedUsersScreen(),
               '/appearance': (context) => const AppearanceScreen(),
@@ -525,7 +573,8 @@ class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
               '/ai_chatbot': (context) => const AIChatbotScreen(),
               '/ai_studio': (context) => const AIStudioScreen(),
               '/channel': (context) {
-                final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+                final args = ModalRoute.of(context)?.settings.arguments
+                    as Map<String, dynamic>?;
                 return ChannelChatScreen(
                   channelId: args?['channelId'] as String? ?? '',
                   channelName: args?['channelName'] as String? ?? 'Channel',
@@ -535,7 +584,8 @@ class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
               '/global_search': (context) => const GlobalSearchScreen(),
               '/contacts': (context) => const ContactsScreen(),
               '/settings': (context) => const SettingsScreen(),
-              '/notifications_settings': (context) => const NotificationsSettingsScreen(),
+              '/notifications_settings': (context) =>
+                  const NotificationsSettingsScreen(),
               '/data_storage': (context) => const DataStorageScreen(),
               '/account_settings': (context) => const AccountSettingsScreen(),
               '/bot_settings': (context) => const BotSettingsScreen(),
@@ -552,7 +602,7 @@ class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
 }
 
 // ============================================================================
-// APP LOCK WRAPPER — separated so MaterialApp doesn't rebuild on settings changes
+// APP LOCK WRAPPER
 // ============================================================================
 class _AppLockWrapper extends StatefulWidget {
   final Widget child;
@@ -588,7 +638,9 @@ class _AppLockWrapperState extends State<_AppLockWrapper> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               backgroundColor: Color(0xFF0A0A0F),
-              body: Center(child: CircularProgressIndicator(color: Color(0xFF8B5CF6))),
+              body: Center(
+                child: CircularProgressIndicator(color: Color(0xFF8B5CF6)),
+              ),
             );
           }
 
@@ -642,7 +694,7 @@ class _AppLockWrapperState extends State<_AppLockWrapper> {
 }
 
 // ============================================================================
-// LOCK SCREEN WIDGET — themed with purple gradient + glassmorphism passcode
+// LOCK SCREEN
 // ============================================================================
 class LockScreen extends StatefulWidget {
   final VoidCallback onUnlocked;
@@ -669,7 +721,8 @@ class _LockScreenState extends State<LockScreen> {
     if (_isAuthenticating) return;
     _isAuthenticating = true;
 
-    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+    final settingsProvider =
+        Provider.of<SettingsProvider>(context, listen: false);
 
     if (settingsProvider.biometricLock) {
       final localAuth = LocalAuthentication();
@@ -685,14 +738,17 @@ class _LockScreenState extends State<LockScreen> {
               biometricRequiredTitle: 'Biometric authentication required',
               biometricSuccess: 'Authentication successful',
               deviceCredentialsRequiredTitle: 'Device credentials required',
-              deviceCredentialsSetupDescription: 'Please set up device credentials',
+              deviceCredentialsSetupDescription:
+                  'Please set up device credentials',
               goToSettingsButton: 'Go to Settings',
-              goToSettingsDescription: 'Please set up biometric authentication in your device settings',
+              goToSettingsDescription:
+                  'Please set up biometric authentication in your device settings',
             ),
             IOSAuthMessages(
               cancelButton: 'Cancel',
               goToSettingsButton: 'Go to Settings',
-              goToSettingsDescription: 'Please set up biometric authentication in your device settings',
+              goToSettingsDescription:
+                  'Please set up biometric authentication in your device settings',
               lockOut: 'Please re-enable biometric authentication',
             ),
           ],
@@ -741,7 +797,9 @@ class _LockScreenState extends State<LockScreen> {
           child: Center(
             child: _showPasscode
                 ? _PasscodeEntry(
-                    correctPasscode: Provider.of<SettingsProvider>(context, listen: false).passcode,
+                    correctPasscode:
+                        Provider.of<SettingsProvider>(context, listen: false)
+                            .passcode,
                     onUnlocked: widget.onUnlocked,
                     onCancel: () => setState(() => _showPasscode = false),
                   )
@@ -799,7 +857,8 @@ class _LockScreenState extends State<LockScreen> {
         const SizedBox(height: 48),
         GestureDetector(
           onTap: () {
-            final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+            final settingsProvider =
+                Provider.of<SettingsProvider>(context, listen: false);
             if (settingsProvider.appPasscode) {
               setState(() => _showPasscode = true);
             } else {
@@ -807,7 +866,8 @@ class _LockScreenState extends State<LockScreen> {
             }
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -845,7 +905,7 @@ class _LockScreenState extends State<LockScreen> {
 }
 
 // ============================================================================
-// INLINE PASSCODE ENTRY — glassmorphism themed, no dialog
+// PASSCODE ENTRY
 // ============================================================================
 class _PasscodeEntry extends StatefulWidget {
   final String correctPasscode;
@@ -880,7 +940,8 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
   void _onBackspace() {
     if (_enteredPasscode.isNotEmpty) {
       setState(() {
-        _enteredPasscode = _enteredPasscode.substring(0, _enteredPasscode.length - 1);
+        _enteredPasscode =
+            _enteredPasscode.substring(0, _enteredPasscode.length - 1);
         _errorMessage = '';
       });
     }
@@ -941,7 +1002,6 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
             ),
           ),
           const SizedBox(height: 32),
-
           AnimatedContainer(
             duration: const Duration(milliseconds: 100),
             transform: _isShaking
@@ -963,7 +1023,8 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
                     boxShadow: isFilled
                         ? [
                             BoxShadow(
-                              color: const Color(0xFF8B5CF6).withOpacity(0.5),
+                              color: const Color(0xFF8B5CF6)
+                                  .withOpacity(0.5),
                               blurRadius: 12,
                               spreadRadius: 2,
                             ),
@@ -974,7 +1035,6 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
               }),
             ),
           ),
-
           if (_errorMessage.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(
@@ -986,9 +1046,7 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
               ),
             ),
           ],
-
           const SizedBox(height: 40),
-
           SizedBox(
             width: 300,
             child: GridView.count(
@@ -999,11 +1057,14 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
               children: [
-                for (var i = 1; i <= 9; i++) _buildDigitButton(i.toString()),
+                for (var i = 1; i <= 9; i++)
+                  _buildDigitButton(i.toString()),
                 _buildActionButton(
                   icon: Icons.fingerprint,
                   onTap: () {
-                    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+                    final settingsProvider =
+                        Provider.of<SettingsProvider>(context,
+                            listen: false);
                     if (settingsProvider.biometricLock) {
                       _tryBiometric();
                     }
@@ -1017,9 +1078,7 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
               ],
             ),
           ),
-
           const SizedBox(height: 24),
-
           TextButton(
             onPressed: widget.onCancel,
             child: Text(
@@ -1037,7 +1096,13 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
 
   double _shakeOffset() {
     final shakeCount = DateTime.now().millisecond % 4;
-    return shakeCount == 0 ? -8 : shakeCount == 1 ? 8 : shakeCount == 2 ? -4 : 4;
+    return shakeCount == 0
+        ? -8
+        : shakeCount == 1
+            ? 8
+            : shakeCount == 2
+                ? -4
+                : 4;
   }
 
   Future<void> _tryBiometric() async {
@@ -1090,7 +1155,8 @@ class _PasscodeEntryState extends State<_PasscodeEntry> {
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildActionButton(
+      {required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
