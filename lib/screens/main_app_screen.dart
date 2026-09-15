@@ -57,23 +57,41 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // FETCH OTHER USER (direct chats)
+  // RESOLVE MY UID
+  // ═══════════════════════════════════════════════════════════════
+  String get _myUid {
+    final auth = Provider.of<AuraAuthProvider>(context, listen: false);
+    final fromProvider = auth.currentUserId ?? auth.mockUserId;
+    if (fromProvider != null && fromProvider.isNotEmpty) {
+      return fromProvider;
+    }
+    return FirebaseAuth.instance.currentUser?.uid ?? '';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // FETCH OTHER USER (for direct chats)
   // ═══════════════════════════════════════════════════════════════
   Future<void> _fetchOtherUser(String uid) async {
+    if (uid.isEmpty) return;
+    if (_userCache.containsKey(uid)) return;
     if (_inFlight.contains(uid)) return;
+
     _inFlight.add(uid);
     try {
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
+
       if (doc.exists && doc.data() != null) {
         final d = doc.data()!;
         _userCache[uid] = {
           'uid': uid,
-          'username': d['username'] ?? 'Unknown',
-          'display_name':
-              d['display_name'] ?? d['username'] ?? d['name'] ?? 'Unknown',
+          'username': (d['username'] ?? '') as String,
+          'display_name': (d['display_name'] ??
+                  d['username'] ??
+                  d['name'] ??
+                  'Unknown') as String,
           'avatar_url': d['avatar_url'],
           'email': d['email'],
           'is_bot': d['is_bot'] == true,
@@ -81,27 +99,29 @@ class _MainAppScreenState extends State<MainAppScreen>
       } else {
         _userCache[uid] = {
           'uid': uid,
-          'username': 'Unknown',
-          'display_name': 'Unknown',
+          'username': '',
+          'display_name': 'User',
           'avatar_url': null,
           'email': null,
           'is_bot': false,
         };
       }
+
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('fetchOtherUser error ($uid): $e');
+      _userCache[uid] = {
+        'uid': uid,
+        'username': '',
+        'display_name': 'User',
+        'avatar_url': null,
+        'email': null,
+        'is_bot': false,
+      };
+      if (mounted) setState(() {});
     } finally {
       _inFlight.remove(uid);
     }
-  }
-
-  String get _myUid {
-    final auth = Provider.of<AuraAuthProvider>(context, listen: false);
-    return auth.currentUserId ??
-        auth.mockUserId ??
-        FirebaseAuth.instance.currentUser?.uid ??
-        '';
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -112,9 +132,7 @@ class _MainAppScreenState extends State<MainAppScreen>
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
-        if (!didPop) {
-          SystemNavigator.pop();
-        }
+        if (!didPop) SystemNavigator.pop();
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0A0A0F),
@@ -212,9 +230,6 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // FAB
-  // ═══════════════════════════════════════════════════════════════
   Widget? _buildFAB() {
     switch (_currentIndex) {
       case 0:
@@ -310,8 +325,7 @@ class _MainAppScreenState extends State<MainAppScreen>
           padding: const EdgeInsets.only(top: 8),
           itemCount: chatProvider.chats.length,
           itemBuilder: (context, index) {
-            final chat = chatProvider.chats[index];
-            return _buildChatTile(chat);
+            return _buildChatTile(chatProvider.chats[index]);
           },
         );
       },
@@ -319,69 +333,72 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // CHAT TILE (with direct-chat user resolution)
+  // CHAT TILE
   // ═══════════════════════════════════════════════════════════════
   Widget _buildChatTile(Map<String, dynamic> chat) {
+    final chatId = chat['id'] as String? ?? '';
     final chatType = chat['type'] as String? ?? 'direct';
     final isGroup = chatType == 'group';
     final isChannel = chatType == 'channel';
     final isBot = chatType == 'bot' || chat['is_bot'] == true;
     final isDirect = chatType == 'direct';
 
-    // ─── Resolve name + avatar ───────────────────────────────
+    final myUid = _myUid;
+
+    // ─── Resolve name + avatar ─────────────────────────────────
     String name;
     String? avatar;
     String? otherUserId;
 
     if (isDirect) {
       final participants = List<String>.from(chat['participants'] ?? []);
-      final myUid = _myUid;
       otherUserId = participants.firstWhere(
         (id) => id != myUid,
         orElse: () => '',
       );
 
-      if (otherUserId.isNotEmpty &&
-          !_userCache.containsKey(otherUserId) &&
-          !_inFlight.contains(otherUserId)) {
-        // Kick off async fetch; setState will rebuild when it lands
+      if (otherUserId.isNotEmpty && !_userCache.containsKey(otherUserId)) {
+        // Kick off async; setState will rebuild when it lands
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _fetchOtherUser(otherUserId!);
         });
       }
 
-      final cached = otherUserId.isNotEmpty ? _userCache[otherUserId] : null;
+      final cached =
+          otherUserId.isNotEmpty ? _userCache[otherUserId] : null;
+
       if (cached != null) {
-        name = cached['display_name'] as String? ??
-            cached['username'] as String? ??
-            'Unknown';
+        name = cached['display_name'] as String? ?? 'User';
         avatar = cached['avatar_url'] as String?;
       } else {
+        // Show a soft placeholder while loading (NOT "Unknown")
         name = 'Loading...';
         avatar = null;
       }
     } else {
-      name = chat['name'] ?? chat['title'] ?? 'Unknown';
+      name = (chat['name'] ?? chat['title'] ?? 'Unknown') as String;
       avatar = chat['avatar_url'] as String?;
     }
 
     final lastMessage = chat['last_message'] ?? '';
-    final unread = chat['unread_count'] ?? 0;
 
-    // ─── Route ───────────────────────────────────────────────
+    // ─── Unread count (correct field!) ─────────────────────────
+    final unreadCounts = chat['unread_counts'] as Map<String, dynamic>?;
+    final unread = (unreadCounts?[myUid] as num?)?.toInt() ?? 0;
+
+    // ─── Route ─────────────────────────────────────────────────
     String route;
     Map<String, dynamic> routeArgs;
-
     if (isBot) {
       route = '/bot';
-      routeArgs = {'chatId': chat['id'], 'botName': name};
+      routeArgs = {'chatId': chatId, 'botName': name};
     } else if (isChannel) {
       route = '/channel';
-      routeArgs = {'channelId': chat['id'], 'channelName': name};
+      routeArgs = {'channelId': chatId, 'channelName': name};
     } else {
       route = '/chat';
       routeArgs = {
-        'chatId': chat['id'],
+        'chatId': chatId,
         'chatName': name,
         'chatAvatar': avatar,
         'isGroup': isGroup,
@@ -426,7 +443,7 @@ class _MainAppScreenState extends State<MainAppScreen>
                                 ? Icons.smart_toy
                                 : Icons.person,
                     color: const Color(0xFF8B5CF6),
-                    size: 20,
+                    size: 22,
                   )
                 : null,
           ),
@@ -454,8 +471,11 @@ class _MainAppScreenState extends State<MainAppScreen>
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.4),
+            color: unread > 0
+                ? Colors.white.withOpacity(0.75)
+                : Colors.white.withOpacity(0.4),
             fontSize: 13,
+            fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.normal,
           ),
         ),
         trailing: Column(
@@ -465,8 +485,11 @@ class _MainAppScreenState extends State<MainAppScreen>
             Text(
               'Now',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.3),
+                color: unread > 0
+                    ? const Color(0xFF8B5CF6)
+                    : Colors.white.withOpacity(0.3),
                 fontSize: 11,
+                fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
             if (unread > 0) ...[
@@ -479,13 +502,19 @@ class _MainAppScreenState extends State<MainAppScreen>
                     colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
                   ),
                   borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF8B5CF6).withOpacity(0.4),
+                      blurRadius: 6,
+                    ),
+                  ],
                 ),
                 child: Text(
-                  unread.toString(),
+                  unread > 99 ? '99+' : '$unread',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -521,9 +550,7 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-  Widget _buildStatusTab() {
-    return const StatusScreen();
-  }
+  Widget _buildStatusTab() => const StatusScreen();
 
   Widget _buildCallsTab() {
     return Center(
@@ -549,7 +576,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // NEW CHAT SHEET
+  // SHEETS (unchanged)
   // ═══════════════════════════════════════════════════════════════
   void _showNewChatOptions(BuildContext context) {
     showModalBottomSheet(
@@ -595,9 +622,6 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // STATUS SHEET
-  // ═══════════════════════════════════════════════════════════════
   void _showAddStatusOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -633,12 +657,8 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // NEW CALL SHEET
-  // ═══════════════════════════════════════════════════════════════
   void _showNewCallOptions(BuildContext context) {
     final channelName = CallService.generateChannelName();
-
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1a103c),
@@ -664,7 +684,9 @@ class _MainAppScreenState extends State<MainAppScreen>
                   Text(
                     'Share this code to join',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.6), fontSize: 13),
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 13,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
@@ -765,8 +787,10 @@ class _MainAppScreenState extends State<MainAppScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -797,9 +821,6 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // ⋮ MENU  —  Saved Messages · Settings · Profile · BotCreator · Log Out
-  // ═══════════════════════════════════════════════════════════════
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -807,68 +828,66 @@ class _MainAppScreenState extends State<MainAppScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _handle(),
-                const SizedBox(height: 18),
-                _menuTile(
-                  icon: Icons.bookmark,
-                  iconColor: const Color(0xFF8B5CF6),
-                  label: 'Saved Messages',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.pushNamed(context, '/saved_messages');
-                  },
-                ),
-                _menuTile(
-                  icon: Icons.settings,
-                  iconColor: const Color(0xFF8B5CF6),
-                  label: 'Settings',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.pushNamed(context, '/settings');
-                  },
-                ),
-                _menuTile(
-                  icon: Icons.person,
-                  iconColor: const Color(0xFF06B6D4),
-                  label: 'Profile',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.pushNamed(context, '/profile');
-                  },
-                ),
-                _menuTile(
-                  icon: Icons.smart_toy,
-                  iconColor: const Color(0xFF8B5CF6),
-                  label: 'BotCreator',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.pushNamed(context, '/bot_creator');
-                  },
-                ),
-                _menuTile(
-                  icon: Icons.logout,
-                  iconColor: const Color(0xFFEF4444),
-                  label: 'Log Out',
-                  labelColor: const Color(0xFFEF4444),
-                  onTap: () async {
-                    Navigator.pop(sheetContext);
-                    await _confirmSignOut(context);
-                  },
-                ),
-              ],
-            ),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _handle(),
+              const SizedBox(height: 18),
+              _menuTile(
+                icon: Icons.bookmark,
+                iconColor: const Color(0xFF8B5CF6),
+                label: 'Saved Messages',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(context, '/saved_messages');
+                },
+              ),
+              _menuTile(
+                icon: Icons.settings,
+                iconColor: const Color(0xFF8B5CF6),
+                label: 'Settings',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(context, '/settings');
+                },
+              ),
+              _menuTile(
+                icon: Icons.person,
+                iconColor: const Color(0xFF06B6D4),
+                label: 'Profile',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(context, '/profile');
+                },
+              ),
+              _menuTile(
+                icon: Icons.smart_toy,
+                iconColor: const Color(0xFF8B5CF6),
+                label: 'BotCreator',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushNamed(context, '/bot_creator');
+                },
+              ),
+              _menuTile(
+                icon: Icons.logout,
+                iconColor: const Color(0xFFEF4444),
+                label: 'Log Out',
+                labelColor: const Color(0xFFEF4444),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _confirmSignOut(context);
+                },
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -928,8 +947,10 @@ class _MainAppScreenState extends State<MainAppScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: TextStyle(color: Colors.white.withOpacity(0.5))),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -949,14 +970,10 @@ class _MainAppScreenState extends State<MainAppScreen>
     } catch (_) {}
 
     if (context.mounted) {
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil('/', (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // Shared UI helpers
-  // ═══════════════════════════════════════════════════════════════
   Widget _handle() {
     return Center(
       child: Container(
