@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/auth_provider.dart' show AuraAuthProvider;
 import '../../providers/chat_provider.dart';
 import '../../screens/status/status_screen.dart';
@@ -20,6 +22,12 @@ class _MainAppScreenState extends State<MainAppScreen>
   late TabController _tabController;
   int _currentIndex = 0;
 
+  // ═══════════════════════════════════════════════════════════════
+  // USER CACHE — for resolving direct-chat participants
+  // ═══════════════════════════════════════════════════════════════
+  final Map<String, Map<String, dynamic>> _userCache = {};
+  final Set<String> _inFlight = {};
+
   @override
   void initState() {
     super.initState();
@@ -29,8 +37,10 @@ class _MainAppScreenState extends State<MainAppScreen>
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
-      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      final authProvider =
+          Provider.of<AuraAuthProvider>(context, listen: false);
+      final chatProvider =
+          Provider.of<ChatProvider>(context, listen: false);
 
       if (authProvider.mockUserId != null) {
         chatProvider.setMockUser(authProvider.mockUserId!);
@@ -46,6 +56,57 @@ class _MainAppScreenState extends State<MainAppScreen>
     super.dispose();
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // FETCH OTHER USER (direct chats)
+  // ═══════════════════════════════════════════════════════════════
+  Future<void> _fetchOtherUser(String uid) async {
+    if (_inFlight.contains(uid)) return;
+    _inFlight.add(uid);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      if (doc.exists && doc.data() != null) {
+        final d = doc.data()!;
+        _userCache[uid] = {
+          'uid': uid,
+          'username': d['username'] ?? 'Unknown',
+          'display_name':
+              d['display_name'] ?? d['username'] ?? d['name'] ?? 'Unknown',
+          'avatar_url': d['avatar_url'],
+          'email': d['email'],
+          'is_bot': d['is_bot'] == true,
+        };
+      } else {
+        _userCache[uid] = {
+          'uid': uid,
+          'username': 'Unknown',
+          'display_name': 'Unknown',
+          'avatar_url': null,
+          'email': null,
+          'is_bot': false,
+        };
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('fetchOtherUser error ($uid): $e');
+    } finally {
+      _inFlight.remove(uid);
+    }
+  }
+
+  String get _myUid {
+    final auth = Provider.of<AuraAuthProvider>(context, listen: false);
+    return auth.currentUserId ??
+        auth.mockUserId ??
+        FirebaseAuth.instance.currentUser?.uid ??
+        '';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -151,6 +212,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // FAB
+  // ═══════════════════════════════════════════════════════════════
   Widget? _buildFAB() {
     switch (_currentIndex) {
       case 0:
@@ -197,6 +261,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // CHATS TAB
+  // ═══════════════════════════════════════════════════════════════
   Widget _buildChatsTab() {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, child) {
@@ -251,15 +318,76 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // CHAT TILE (with direct-chat user resolution)
+  // ═══════════════════════════════════════════════════════════════
   Widget _buildChatTile(Map<String, dynamic> chat) {
-    final name = chat['name'] ?? 'Unknown';
-    final avatar = chat['avatar_url'];
-    final lastMessage = chat['last_message'] ?? '';
-    final unread = chat['unread_count'] ?? 0;
     final chatType = chat['type'] as String? ?? 'direct';
     final isGroup = chatType == 'group';
     final isChannel = chatType == 'channel';
     final isBot = chatType == 'bot' || chat['is_bot'] == true;
+    final isDirect = chatType == 'direct';
+
+    // ─── Resolve name + avatar ───────────────────────────────
+    String name;
+    String? avatar;
+    String? otherUserId;
+
+    if (isDirect) {
+      final participants = List<String>.from(chat['participants'] ?? []);
+      final myUid = _myUid;
+      otherUserId = participants.firstWhere(
+        (id) => id != myUid,
+        orElse: () => '',
+      );
+
+      if (otherUserId.isNotEmpty &&
+          !_userCache.containsKey(otherUserId) &&
+          !_inFlight.contains(otherUserId)) {
+        // Kick off async fetch; setState will rebuild when it lands
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _fetchOtherUser(otherUserId!);
+        });
+      }
+
+      final cached = otherUserId.isNotEmpty ? _userCache[otherUserId] : null;
+      if (cached != null) {
+        name = cached['display_name'] as String? ??
+            cached['username'] as String? ??
+            'Unknown';
+        avatar = cached['avatar_url'] as String?;
+      } else {
+        name = 'Loading...';
+        avatar = null;
+      }
+    } else {
+      name = chat['name'] ?? chat['title'] ?? 'Unknown';
+      avatar = chat['avatar_url'] as String?;
+    }
+
+    final lastMessage = chat['last_message'] ?? '';
+    final unread = chat['unread_count'] ?? 0;
+
+    // ─── Route ───────────────────────────────────────────────
+    String route;
+    Map<String, dynamic> routeArgs;
+
+    if (isBot) {
+      route = '/bot';
+      routeArgs = {'chatId': chat['id'], 'botName': name};
+    } else if (isChannel) {
+      route = '/channel';
+      routeArgs = {'channelId': chat['id'], 'channelName': name};
+    } else {
+      route = '/chat';
+      routeArgs = {
+        'chatId': chat['id'],
+        'chatName': name,
+        'chatAvatar': avatar,
+        'isGroup': isGroup,
+        'otherUserId': otherUserId,
+      };
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -269,7 +397,8 @@ class _MainAppScreenState extends State<MainAppScreen>
         border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -283,8 +412,11 @@ class _MainAppScreenState extends State<MainAppScreen>
           child: CircleAvatar(
             radius: 28,
             backgroundColor: const Color(0xFF1a103c),
-            backgroundImage: avatar != null ? NetworkImage(avatar) : null,
-            child: avatar == null
+            backgroundImage: (avatar != null && avatar.isNotEmpty)
+                ? NetworkImage(avatar)
+                : null,
+            onBackgroundImageError: (_, __) {},
+            child: (avatar == null || avatar.isEmpty)
                 ? Icon(
                     isChannel
                         ? Icons.campaign
@@ -312,8 +444,7 @@ class _MainAppScreenState extends State<MainAppScreen>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (isChannel)
-              _pill('CHANNEL', const Color(0xFF8B5CF6)),
+            if (isChannel) _pill('CHANNEL', const Color(0xFF8B5CF6)),
             if (isGroup) _pill('GROUP', const Color(0xFF06B6D4)),
             if (isBot) _pill('BOT', const Color(0xFF8B5CF6)),
           ],
@@ -341,7 +472,8 @@ class _MainAppScreenState extends State<MainAppScreen>
             if (unread > 0) ...[
               const SizedBox(height: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
@@ -361,37 +493,7 @@ class _MainAppScreenState extends State<MainAppScreen>
           ],
         ),
         onTap: () {
-          if (isChannel) {
-            Navigator.pushNamed(
-              context,
-              '/channel',
-              arguments: {
-                'channelId': chat['id'],
-                'channelName': name,
-              },
-            );
-          } else if (isBot) {
-            // Bot chat — bot.html equivalent
-            Navigator.pushNamed(
-              context,
-              '/bot',
-              arguments: {
-                'chatId': chat['id'],
-                'botName': name,
-              },
-            );
-          } else {
-            Navigator.pushNamed(
-              context,
-              '/chat',
-              arguments: {
-                'chatId': chat['id'],
-                'chatName': name,
-                'chatAvatar': avatar,
-                'isGroup': isGroup,
-              },
-            );
-          }
+          Navigator.pushNamed(context, route, arguments: routeArgs);
         },
       ),
     );
@@ -447,7 +549,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  NEW CHAT BOTTOM SHEET (FAB + button)
+  // NEW CHAT SHEET
   // ═══════════════════════════════════════════════════════════════
   void _showNewChatOptions(BuildContext context) {
     showModalBottomSheet(
@@ -494,7 +596,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  STATUS BOTTOM SHEET
+  // STATUS SHEET
   // ═══════════════════════════════════════════════════════════════
   void _showAddStatusOptions(BuildContext context) {
     showModalBottomSheet(
@@ -532,7 +634,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  NEW CALL BOTTOM SHEET
+  // NEW CALL SHEET
   // ═══════════════════════════════════════════════════════════════
   void _showNewCallOptions(BuildContext context) {
     final channelName = CallService.generateChannelName();
@@ -696,8 +798,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  ⋮ MENU  —  matches chats.html
-  //  Items: Saved Messages · Settings · Profile · BotCreator · Log Out
+  // ⋮ MENU  —  Saved Messages · Settings · Profile · BotCreator · Log Out
   // ═══════════════════════════════════════════════════════════════
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
@@ -717,8 +818,6 @@ class _MainAppScreenState extends State<MainAppScreen>
               children: [
                 _handle(),
                 const SizedBox(height: 18),
-
-                // ─── Saved Messages ─────────────────────────────
                 _menuTile(
                   icon: Icons.bookmark,
                   iconColor: const Color(0xFF8B5CF6),
@@ -728,8 +827,6 @@ class _MainAppScreenState extends State<MainAppScreen>
                     Navigator.pushNamed(context, '/saved_messages');
                   },
                 ),
-
-                // ─── Settings ───────────────────────────────────
                 _menuTile(
                   icon: Icons.settings,
                   iconColor: const Color(0xFF8B5CF6),
@@ -739,8 +836,6 @@ class _MainAppScreenState extends State<MainAppScreen>
                     Navigator.pushNamed(context, '/settings');
                   },
                 ),
-
-                // ─── Profile ────────────────────────────────────
                 _menuTile(
                   icon: Icons.person,
                   iconColor: const Color(0xFF06B6D4),
@@ -750,8 +845,6 @@ class _MainAppScreenState extends State<MainAppScreen>
                     Navigator.pushNamed(context, '/profile');
                   },
                 ),
-
-                // ─── BotCreator ─────────────────────────────────
                 _menuTile(
                   icon: Icons.smart_toy,
                   iconColor: const Color(0xFF8B5CF6),
@@ -761,8 +854,6 @@ class _MainAppScreenState extends State<MainAppScreen>
                     Navigator.pushNamed(context, '/bot_creator');
                   },
                 ),
-
-                // ─── Log Out ────────────────────────────────────
                 _menuTile(
                   icon: Icons.logout,
                   iconColor: const Color(0xFFEF4444),
@@ -858,14 +949,13 @@ class _MainAppScreenState extends State<MainAppScreen>
     } catch (_) {}
 
     if (context.mounted) {
-      // Route back to the root — AuthRouter will re-evaluate
       Navigator.of(context)
           .pushNamedAndRemoveUntil('/', (route) => false);
     }
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  Shared UI helpers
+  // Shared UI helpers
   // ═══════════════════════════════════════════════════════════════
   Widget _handle() {
     return Center(
