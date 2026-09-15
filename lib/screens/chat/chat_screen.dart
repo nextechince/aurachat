@@ -74,26 +74,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   String? _replyingToSender;
   String? _editingMessageId;
 
-  // Voice note recording
   bool _isRecording = false;
   DateTime? _recordingStartTime;
   Timer? _recordingTimer;
   String? _recordingPath;
   int _recordingSeconds = 0;
 
-  // Video players cache
   final Map<String, VideoPlayerController> _videoControllers = {};
 
-  // Search
   bool _isSearching = false;
   List<Map<String, dynamic>> _searchResults = [];
   int _currentSearchIndex = -1;
 
-  // Pinned messages
   List<Map<String, dynamic>> _pinnedMessages = [];
   bool _showPinned = false;
 
-  // Selection mode
   List<String> _selectedMessages = [];
   bool _isSelectionMode = false;
 
@@ -102,7 +97,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   String? _chatAvatar;
   bool _isGroup = false;
   bool _isChannel = false;
-  String? _creatorEmail; 
+  String? _creatorEmail;
   String? _myRole;
   Map<String, dynamic>? _chatSettings;
   bool _canSend = true;
@@ -175,6 +170,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
       _loadChatInfo();
       _subscribeToChatInfo();
       _loadPinnedMessages();
+      _clearUnreadCount();
       if (!_isGroup) {
         _initDirectChatFeatures();
       }
@@ -182,15 +178,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-  /// FIX: _checkBlockStatus() is async and sets _otherUserId only after its
-  /// Firestore reads complete. It was previously called without awaiting,
-  /// so _subscribeToOtherUserStatus() and _subscribeToTyping() ran immediately
-  /// afterward with _otherUserId still null, causing them to silently return
-  /// early (see their `if (_otherUserId == null) return;` guards). That meant
-  /// the online-status listener never actually attached, so _otherUserStatus
-  /// stayed null and the UI always fell back to showing "Online".
-  /// Awaiting _checkBlockStatus() first ensures _otherUserId is set before the
-  /// dependent subscriptions are started.
+  /// Clear unread counter when opening the chat
+  Future<void> _clearUnreadCount() async {
+    if (_chatId == null) return;
+    final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
+    final myUid = authProvider.user?.uid ?? authProvider.mockUserId;
+    if (myUid == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(_chatId!)
+          .update({
+        'unread_counts.$myUid': 0,
+        'last_read_at.$myUid': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Clear unread error: $e');
+    }
+  }
+
   Future<void> _initDirectChatFeatures() async {
     await _checkBlockStatus();
     _subscribeToBlockStatus();
@@ -234,7 +240,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     super.dispose();
   }
 
-  /// Set user as online
   Future<void> _setOnlineStatus() async {
     final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
     final userId = authProvider.user?.uid ?? authProvider.mockUserId;
@@ -254,7 +259,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     });
   }
 
-  /// Set user as offline
   Future<void> _setOfflineStatus() async {
     _statusTimer?.cancel();
     final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
@@ -278,7 +282,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     return DateFormat('MMM d, HH:mm').format(time);
   }
 
-  /// Check initial block status
   Future<void> _checkBlockStatus() async {
     if (_isGroup || _chatId == null) return;
 
@@ -323,7 +326,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-  /// Real-time block status listener
   void _subscribeToBlockStatus() {
     if (_isGroup || _chatId == null) return;
 
@@ -354,7 +356,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     });
   }
 
-  /// Listen to other user's status (online/typing) — HIDDEN if blocked
   void _subscribeToOtherUserStatus() {
     if (_isGroup || _otherUserId == null) return;
 
@@ -389,7 +390,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     });
   }
 
-  /// Listen to typing indicators — HIDDEN if blocked
   void _subscribeToTyping() {
     if (_isGroup || _chatId == null || _otherUserId == null) return;
 
@@ -423,7 +423,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     });
   }
 
-  /// Send typing indicator
   void _startTyping() {
     if (_isGroup || _chatId == null || _isBlocked) return;
 
@@ -444,7 +443,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     });
   }
 
-  /// Remove typing indicator
   void _stopTyping() {
     if (_isGroup || _chatId == null) return;
 
@@ -474,7 +472,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
 
         if (mounted) {
           setState(() {
-            _creatorEmail = data['created_by_email'] as String?; 
+            _creatorEmail = data['created_by_email'] as String?;
             _chatSettings = data['settings'] as Map<String, dynamic>?;
             _myRole = (data['participants_data']?[userId]?['role'] ?? 'member') as String;
 
@@ -516,22 +514,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _loadMessages() async {
-        if (_chatId == null) {
+    if (_chatId == null) {
       setState(() => _isLoading = false);
       return;
     }
 
     try {
       final firestore = FirebaseFirestore.instance;
-      // FIX: removed .where('deleted_for_everyone', isEqualTo: false) from the
-      // query. Combining a .where() (equality) on one field with .orderBy() on
-      // a DIFFERENT field (created_at) requires a Firestore composite index. If
-      // that index was never created in the Firebase console, this exact query
-      // fails silently (only a debugPrint, nothing shown to the user), leaving
-      // the message list permanently empty — matching "old messages don't show,
-      // as if I never sent anything". Filtering deleted_for_everyone client-side
-      // instead avoids the composite-index dependency entirely, using the same
-      // pattern already used below for the per-user 'deleted_for' array check.
       final snapshot = await firestore
           .collection('chats')
           .doc(_chatId!)
@@ -554,16 +543,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
         });
       }
 
-      // Batch fetch all users at once
       final missingUserIds = userIds.where((id) => !_userCache.containsKey(id) && !_pendingUserFetches.contains(id)).toSet();
-      
+
       if (missingUserIds.isNotEmpty) {
         _pendingUserFetches.addAll(missingUserIds);
-        
+
         final userDocs = await Future.wait(
           missingUserIds.map((id) => firestore.collection('users').doc(id).get()),
         );
-        
+
         _pendingUserFetches.removeAll(missingUserIds);
         for (final userDoc in userDocs) {
           if (userDoc.exists) {
@@ -572,7 +560,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
               'username': u['username'] ?? u['display_name'] ?? 'Unknown',
               'avatar_url': u['avatar_url'],
               'bio': u['bio'],
-              'email': u['email'], 
+              'email': u['email'],
               'is_verified': u['is_verified'] == true,
             };
           }
@@ -588,7 +576,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
             'username': 'Unknown',
             'avatar_url': null,
             'bio': null,
-            'email': null, 
+            'email': null,
             'is_verified': false,
           };
         }
@@ -604,20 +592,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
       setState(() => _isLoading = false);
     }
   }
- 
-    void _subscribeToMessages() {
+
+  void _subscribeToMessages() {
     if (_chatId == null) return;
 
     final firestore = FirebaseFirestore.instance;
     final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
     final currentUserId = authProvider.user?.uid ?? authProvider.mockUserId;
 
-    // FIX: same as _loadMessages() above — removed the
-    // .where('deleted_for_everyone', isEqualTo: false) clause since combining
-    // it with .orderBy('created_at') on a different field requires a Firestore
-    // composite index that may not exist, silently failing the whole
-    // subscription. deleted_for_everyone is now filtered client-side below,
-    // right alongside the existing per-user 'deleted_for' check.
     _messageSubscription = firestore
         .collection('chats')
         .doc(_chatId!)
@@ -630,7 +612,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
           final Set<String> allSenderIds = {};
           final List<Map<String, dynamic>> allMessages = [];
 
-          // First pass: collect all sender IDs and build message list
           for (final doc in snapshot.docs) {
             final data = doc.data();
             final messageId = doc.id;
@@ -652,20 +633,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
             });
           }
 
-          // Fetch ALL missing users at once (not just from changes)
           final missingUserIds = allSenderIds
               .where((id) => !_userCache.containsKey(id) && !_pendingUserFetches.contains(id))
               .toSet();
-          
+
           if (missingUserIds.isNotEmpty) {
             _pendingUserFetches.addAll(missingUserIds);
-            
+
             final userDocs = await Future.wait(
               missingUserIds.map((id) => firestore.collection('users').doc(id).get()),
             );
-            
+
             _pendingUserFetches.removeAll(missingUserIds);
-            
+
             for (final userDoc in userDocs) {
               if (userDoc.exists) {
                 final u = userDoc.data()!;
@@ -673,14 +653,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
                   'username': u['username'] ?? u['display_name'] ?? 'Unknown',
                   'avatar_url': u['avatar_url'],
                   'bio': u['bio'],
-                  'email': u['email'], 
+                  'email': u['email'],
                   'is_verified': u['is_verified'] == true,
                 };
               }
             }
           }
 
-          // Second pass: apply user data to ALL messages
           for (final msg in allMessages) {
             final sid = msg['sender_id'] as String?;
             if (sid != null && _userCache.containsKey(sid)) {
@@ -690,7 +669,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
                 'username': 'Unknown',
                 'avatar_url': null,
                 'bio': null,
-                'email': null, 
+                'email': null,
                 'is_verified': false,
               };
             }
@@ -700,12 +679,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
             _messages = allMessages;
             _isLoading = false;
           });
+          _clearUnreadCount();
           _scrollToBottom(force: _messages.length <= 20);
         }, onError: (e) {
           debugPrint('Message subscription error: $e');
           setState(() => _isLoading = false);
         });
-  }    
+  }
 
   Future<void> _loadPinnedMessages() async {
     if (_chatId == null) return;
@@ -733,7 +713,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-    void _scrollToBottom({bool force = false}) {
+  void _scrollToBottom({bool force = false}) {
     if (!_scrollController.hasClients) return;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
@@ -747,51 +727,50 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
   }
 
   List<TextSpan> _parseTextWithLinks(String text, bool isMe) {
-  final urlRegex = RegExp(r'https?://[^\s]+');
-  final matches = urlRegex.allMatches(text);
-  
-  if (matches.isEmpty) {
-    return [TextSpan(text: text, style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)))];
-  }
+    final urlRegex = RegExp(r'https?://[^\s]+');
+    final matches = urlRegex.allMatches(text);
 
-  final spans = <TextSpan>[];
-  int lastEnd = 0;
+    if (matches.isEmpty) {
+      return [TextSpan(text: text, style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)))];
+    }
 
-  for (final match in matches) {
-    if (match.start > lastEnd) {
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)),
+        ));
+      }
       spans.add(TextSpan(
-        text: text.substring(lastEnd, match.start),
+        text: match.group(0),
+        style: TextStyle(
+          color: isMe ? Colors.white.withOpacity(0.85) : const Color(0xFF8B5CF6),
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()..onTap = () => _openLink(match.group(0)!),
+      ));
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
         style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)),
       ));
     }
-    spans.add(TextSpan(
-      text: match.group(0),
-      style: TextStyle(
-        color: isMe ? Colors.white.withOpacity(0.85) : const Color(0xFF8B5CF6),
-        decoration: TextDecoration.underline,
-      ),
-      recognizer: TapGestureRecognizer()..onTap = () => _openLink(match.group(0)!),
-    ));
-    lastEnd = match.end;
+
+    return spans;
   }
 
-  if (lastEnd < text.length) {
-    spans.add(TextSpan(
-      text: text.substring(lastEnd),
-      style: TextStyle(color: isMe ? Colors.white : Colors.white.withOpacity(0.9)),
-    ));
+  Future<void> _openLink(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
-
-  return spans;
-}
-
-Future<void> _openLink(String url) async {
-  final uri = Uri.parse(url);
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-}
-
 
   void _scrollToMessage(String messageId) {
     final index = _messages.indexWhere((m) => m['id'] == messageId);
@@ -825,7 +804,7 @@ Future<void> _openLink(String url) async {
     await _sendMessage(type: 'text', content: text);
   }
 
-    Future<void> _sendMessage({
+  Future<void> _sendMessage({
     required String type,
     required String content,
     String? mediaUrl,
@@ -841,7 +820,6 @@ Future<void> _openLink(String url) async {
 
       final messageId = const Uuid().v4();
 
-      // Optimistic UI - shows immediately
       final optimisticMessage = {
         'id': messageId,
         'chat_id': _chatId!,
@@ -867,7 +845,7 @@ Future<void> _openLink(String url) async {
           'username': authProvider.displayName ?? authProvider.userName ?? 'You',
           'avatar_url': authProvider.userPhotoUrl,
           'bio': authProvider.userBio,
-          'email': authProvider.email, 
+          'email': authProvider.email,
           'is_verified': false,
         },
       };
@@ -904,13 +882,23 @@ Future<void> _openLink(String url) async {
       };
 
       try {
-        await Future.wait([
-          firestore.collection('chats').doc(_chatId!).collection('messages').doc(messageId).set(serverMessage),
-          firestore.collection('chats').doc(_chatId!).update({
-            'last_message': content,
-            'last_message_at': FieldValue.serverTimestamp(),
-          }),
-        ]);
+        await firestore.collection('chats').doc(_chatId!).collection('messages').doc(messageId).set(serverMessage);
+
+        // ── Increment unread_counts for every OTHER participant ──
+        final chatUpdate = <String, dynamic>{
+          'last_message': content,
+          'last_message_at': FieldValue.serverTimestamp(),
+        };
+
+        final chatDoc = await firestore.collection('chats').doc(_chatId!).get();
+        final participants = List<String>.from(chatDoc.data()?['participants'] ?? []);
+        for (final p in participants) {
+          if (p != userId) {
+            chatUpdate['unread_counts.$p'] = FieldValue.increment(1);
+          }
+        }
+
+        await firestore.collection('chats').doc(_chatId!).update(chatUpdate);
       } catch (e) {
         debugPrint('Firestore write error: $e');
         setState(() {
@@ -932,7 +920,7 @@ Future<void> _openLink(String url) async {
         );
       }
     }
-   }
+  }
 
   void _showPermissionDenied() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -960,8 +948,8 @@ Future<void> _openLink(String url) async {
       ),
     );
   }
-  
-    Future<void> _unblockUser() async {
+
+  Future<void> _unblockUser() async {
     try {
       final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
       final currentUserId = authProvider.user?.uid ?? authProvider.mockUserId;
@@ -1081,7 +1069,7 @@ Future<void> _openLink(String url) async {
     }
   }
 
-    void _showReactionPicker(String messageId) {
+  void _showReactionPicker(String messageId) {
     final allReactions = [
       '❤️', '👍', '👎', '😂', '😮', '😢', '🎉', '🔥',
       '👏', '🙏', '💯', '⭐', '🤔', '🤬', '🤡', '💀',
@@ -1110,7 +1098,6 @@ Future<void> _openLink(String url) async {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Drag handle
             Container(
               width: 40,
               height: 4,
@@ -1120,7 +1107,6 @@ Future<void> _openLink(String url) async {
               ),
             ),
             const SizedBox(height: 16),
-            // Title
             Text(
               'Reactions',
               style: TextStyle(
@@ -1130,7 +1116,6 @@ Future<void> _openLink(String url) async {
               ),
             ),
             const SizedBox(height: 12),
-            // Emoji grid - 8 per row
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -1160,12 +1145,11 @@ Future<void> _openLink(String url) async {
     );
   }
 
-    void _forwardMessage(Map<String, dynamic> message) async {
+  void _forwardMessage(Map<String, dynamic> message) async {
     final authProvider = Provider.of<AuraAuthProvider>(context, listen: false);
     final currentUserId = authProvider.user?.uid ?? authProvider.mockUserId;
     if (currentUserId == null) return;
 
-    // Get all chats this user is in
     final chatsSnapshot = await FirebaseFirestore.instance
         .collection('chats')
         .where('participants', arrayContains: currentUserId)
@@ -1174,7 +1158,6 @@ Future<void> _openLink(String url) async {
 
     if (!mounted) return;
 
-    // Show chat picker bottom sheet
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1a103c),
@@ -1190,7 +1173,6 @@ Future<void> _openLink(String url) async {
         builder: (context, scrollController) {
           return Column(
             children: [
-              // Handle
               Container(
                 margin: const EdgeInsets.only(top: 12, bottom: 8),
                 width: 40,
@@ -1200,7 +1182,6 @@ Future<void> _openLink(String url) async {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // Title
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
@@ -1219,7 +1200,6 @@ Future<void> _openLink(String url) async {
                 ),
               ),
               const Divider(color: Colors.white10),
-              // Chat list
               Expanded(
                 child: chatsSnapshot.docs.isEmpty
                   ? Center(
@@ -1236,16 +1216,14 @@ Future<void> _openLink(String url) async {
                         final chatDoc = chatsSnapshot.docs[index];
                         final chatData = chatDoc.data();
                         final chatId = chatDoc.id;
-                        
-                        // Skip current chat
+
                         if (chatId == _chatId) return const SizedBox.shrink();
 
                         final isGroup = chatData['is_group'] == true || chatData['type'] == 'group';
                         final isChannel = chatData['type'] == 'channel';
                         final chatName = chatData['name'] ?? chatData['title'] ?? 'Unknown';
                         final chatAvatar = chatData['avatar_url'] as String?;
-                        
-                        // Get other participant for DM
+
                         String? otherUserName;
                         String? otherUserAvatar;
                         if (!isGroup && !isChannel) {
@@ -1255,7 +1233,6 @@ Future<void> _openLink(String url) async {
                             orElse: () => '',
                           );
                           if (otherId.isNotEmpty) {
-                            // Try to get from participants_data
                             final pData = chatData['participants_data']?[otherId];
                             if (pData != null) {
                               otherUserName = pData['username'] ?? pData['name'];
@@ -1335,7 +1312,6 @@ Future<void> _openLink(String url) async {
       final originalFileSize = originalMessage['file_size'] as String?;
       final originalDuration = originalMessage['duration'] as int?;
 
-      // Build forward content
       String forwardContent;
       if (messageType == 'text') {
         forwardContent = originalContent;
@@ -1375,7 +1351,6 @@ Future<void> _openLink(String url) async {
         .collection('messages')
         .add(newMessage);
 
-      // Update last message in chat
       await FirebaseFirestore.instance.collection('chats').doc(targetChatId).update({
         'last_message': forwardContent,
         'last_message_at': FieldValue.serverTimestamp(),
@@ -1484,30 +1459,26 @@ Future<void> _openLink(String url) async {
     _scrollToMessage(_searchResults[_currentSearchIndex]['id']);
   }
 
-     Future<void> _deleteMessageForEveryone(String messageId) async {
+  Future<void> _deleteMessageForEveryone(String messageId) async {
     try {
       final firestore = FirebaseFirestore.instance;
-      
-      // ── GET MESSAGE DATA TO CHECK FOR MEDIA ──
+
       final messageDoc = await firestore
           .collection('chats')
           .doc(_chatId!)
           .collection('messages')
           .doc(messageId)
           .get();
-      
+
       final messageData = messageDoc.data();
       final mediaUrl = messageData?['media_url'] as String?;
       final messageType = messageData?['type'] as String?;
 
-      // ── DELETE MEDIA FROM CLOUDINARY IF EXISTS ──
-      if (mediaUrl != null && mediaUrl.isNotEmpty && 
+      if (mediaUrl != null && mediaUrl.isNotEmpty &&
           (messageType == 'image' || messageType == 'video' || messageType == 'audio' || messageType == 'file')) {
         await CloudinaryService.deleteFile(mediaUrl);
       }
-      // ── END CLOUDINARY DELETE ──
 
-      // ── MARK MESSAGE AS DELETED ──
       await firestore
           .collection('chats')
           .doc(_chatId!)
@@ -1610,7 +1581,7 @@ Future<void> _openLink(String url) async {
     );
   }
 
-    void _showMessageOptions(Map<String, dynamic> message, bool isMe) {
+  void _showMessageOptions(Map<String, dynamic> message, bool isMe) {
     final isDeleted = message['deleted_for_everyone'] == true;
     final isText = message['type'] == 'text';
     final canEdit = isMe && isText && !isDeleted;
@@ -1635,8 +1606,7 @@ Future<void> _openLink(String url) async {
               decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 16),
-            
-            // Quick reactions row at top
+
             if (!isDeleted) ...[
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -1663,7 +1633,7 @@ Future<void> _openLink(String url) async {
               ),
               const Divider(color: Colors.white10),
             ],
-            
+
             if (canEdit) ...[
               ListTile(
                 leading: Container(
@@ -1678,7 +1648,7 @@ Future<void> _openLink(String url) async {
                 },
               ),
             ],
-            
+
             if (!isDeleted && isText) ...[
               ListTile(
                 leading: Container(
@@ -1693,7 +1663,7 @@ Future<void> _openLink(String url) async {
                 },
               ),
             ],
-            
+
             if (!isDeleted) ...[
               ListTile(
                 leading: Container(
@@ -1720,7 +1690,7 @@ Future<void> _openLink(String url) async {
                 },
               ),
             ],
-            
+
             if (!isDeleted && mediaUrl != null && (type == 'image' || type == 'video' || type == 'audio')) ...[
               ListTile(
                 leading: Container(
@@ -1735,7 +1705,7 @@ Future<void> _openLink(String url) async {
                 },
               ),
             ],
-            
+
             if (isMe) ...[
               ListTile(
                 leading: Container(
@@ -1750,7 +1720,7 @@ Future<void> _openLink(String url) async {
                 },
               ),
             ],
-            
+
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(8),
@@ -1763,7 +1733,7 @@ Future<void> _openLink(String url) async {
                 _deleteMessageForMe(message['id']);
               },
             ),
-            
+
             if (!isDeleted) ...[
               ListTile(
                 leading: Container(
@@ -1782,8 +1752,7 @@ Future<void> _openLink(String url) async {
                 },
               ),
             ],
-            
-            // Report - always available
+
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(8),
@@ -1796,7 +1765,7 @@ Future<void> _openLink(String url) async {
                 _showReportDialog(message);
               },
             ),
-            
+
             if (!isDeleted && !isMe) ...[
               const Divider(color: Colors.white10),
               ListTile(
@@ -1915,8 +1884,6 @@ Future<void> _openLink(String url) async {
     );
   }
 
-  // ==================== MEDIA PICKING & UPLOAD ====================
-
   Future<void> _pickImage() async {
     if (!_canSendFiles) { _showPermissionDenied(); return; }
     if (!_isGroup && _isBlocked) { _showBlockedWarning(); return; }
@@ -1988,7 +1955,7 @@ Future<void> _openLink(String url) async {
     }
   }
 
-    Future<void> _uploadAndSendMedia({
+  Future<void> _uploadAndSendMedia({
     required File file,
     required String type,
     String? fileName,
@@ -2012,8 +1979,7 @@ Future<void> _openLink(String url) async {
       );
 
       String? mediaUrl;
-      
-      // FIX: Use appropriate upload method for each file type
+
       if (type == 'image') {
         mediaUrl = await CloudinaryService.uploadImage(file, 'aurachat/chats/$_chatId');
       } else if (type == 'video') {
@@ -2021,7 +1987,6 @@ Future<void> _openLink(String url) async {
       } else if (type == 'audio') {
         mediaUrl = await CloudinaryService.uploadAudio(file, 'aurachat/chats/$_chatId');
       } else {
-        // file/document
         mediaUrl = await CloudinaryService.uploadFile(file, 'aurachat/chats/$_chatId');
       }
 
@@ -2042,8 +2007,6 @@ Future<void> _openLink(String url) async {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
     }
   }
-
-  // ==================== VOICE NOTE RECORDING ====================
 
   Future<void> _startRecording() async {
     try {
@@ -2126,8 +2089,6 @@ Future<void> _openLink(String url) async {
     return '$m:$s';
   }
 
-  // ==================== AUDIO PLAYBACK ====================
-
   Future<void> _playAudio(String messageId, String audioUrl) async {
     try {
       if (_currentlyPlayingAudioId == messageId) {
@@ -2150,8 +2111,6 @@ Future<void> _openLink(String url) async {
     }
   }
 
-  // ==================== FILE & DOWNLOAD ====================
-
   Future<void> _openFile(String url, String? fileName) async {
     try {
       final dir = await getTemporaryDirectory();
@@ -2168,19 +2127,18 @@ Future<void> _openLink(String url) async {
     }
   }
 
-    Future<void> _downloadMedia(String url, String fileName) async {
+  Future<void> _downloadMedia(String url, String fileName) async {
     try {
-      // FIX: Request photos permission for images/videos
       final isImage = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png');
       final isVideo = fileName.endsWith('.mp4') || fileName.endsWith('.mov');
-      
+
       PermissionStatus status;
       if (isImage || isVideo) {
         status = await Permission.photos.request();
       } else {
         status = await Permission.storage.request();
       }
-      
+
       if (!status.isGranted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Permission denied. Enable in settings.')),
@@ -2195,14 +2153,13 @@ Future<void> _openLink(String url) async {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode != 200) throw Exception('Download failed');
 
-      // FIX: Save to public Downloads directory
       Directory? saveDir;
       if (Platform.isAndroid) {
         saveDir = Directory('/storage/emulated/0/Download/AURA');
       } else {
         saveDir = await getApplicationDocumentsDirectory();
       }
-      
+
       if (!await saveDir.exists()) {
         await saveDir.create(recursive: true);
       }
@@ -2222,8 +2179,6 @@ Future<void> _openLink(String url) async {
       );
     }
   }
-
-  // ==================== IMAGE VIEWER ====================
 
   void _showImageViewer(String imageUrl) {
     showDialog(
@@ -2275,8 +2230,6 @@ Future<void> _openLink(String url) async {
     );
   }
 
-  // ==================== VIDEO PLAYER ====================
-
   VideoPlayerController _getVideoController(String url) {
     if (!_videoControllers.containsKey(url)) {
       final controller = VideoPlayerController.networkUrl(Uri.parse(url));
@@ -2287,8 +2240,6 @@ Future<void> _openLink(String url) async {
     }
     return _videoControllers[url]!;
   }
-
-  // ==================== DATE HELPERS ====================
 
   bool _shouldShowDateSeparator(int index) {
     if (index == 0) return true;
@@ -2309,8 +2260,6 @@ Future<void> _openLink(String url) async {
     if (_isSameDay(date, yesterday)) return 'Yesterday';
     return DateFormat('MMMM d, yyyy').format(date);
   }
-
-  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
@@ -2366,7 +2315,7 @@ Future<void> _openLink(String url) async {
                         children: [
                           VerifiedUsername(
                             username: _chatName ?? 'Chat',
-                            email: _isGroup ? _creatorEmail : null, 
+                            email: _isGroup ? _creatorEmail : null,
                             style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
                             badgeSize: 14,
                             spacing: 6,
@@ -2411,11 +2360,11 @@ Future<void> _openLink(String url) async {
                   onPressed: () => setState(() => _isSearching = true),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.videocam, color: Colors.white70), 
+                  icon: const Icon(Icons.videocam, color: Colors.white70),
                   onPressed: (_isBlocked && !_isGroup) ? _showBlockedWarning : () {}
                 ),
                 IconButton(
-                  icon: const Icon(Icons.call, color: Colors.white70), 
+                  icon: const Icon(Icons.call, color: Colors.white70),
                   onPressed: (_isBlocked && !_isGroup) ? _showBlockedWarning : () {}
                 ),
                 if ((_isGroup || _isChannel) && _chatId != null)
@@ -2437,7 +2386,6 @@ Future<void> _openLink(String url) async {
             ),
       body: Column(
         children: [
-          // Pinned messages banner
           if (_pinnedMessages.isNotEmpty && _showPinned)
             Container(
               width: double.infinity,
@@ -2716,9 +2664,9 @@ Future<void> _openLink(String url) async {
                             onDoubleTap: () => _showReactionPicker(message['id']),
                             onLongPress: () => _showMessageOptions(message, isMe),
                             child: _buildMessageBubble(
-                              context, 
-                              message: message, 
-                              isMe: isMe, 
+                              context,
+                              message: message,
+                              isMe: isMe,
                               showAvatar: showAvatar,
                               isDeleted: isDeleted,
                             ),
@@ -2780,17 +2728,16 @@ Future<void> _openLink(String url) async {
               ),
             ),
 
-          // Recording indicator
           if (_isRecording)
             _buildRecordingIndicator(),
 
           if (_showEmojiPicker)
-  CustomEmojiPicker(
-    onEmojiSelected: (emoji) {
-      setState(() => _messageController.text += emoji);
-    },
-    onClose: () => setState(() => _showEmojiPicker = false),
-  ),
+            CustomEmojiPicker(
+              onEmojiSelected: (emoji) {
+                setState(() => _messageController.text += emoji);
+              },
+              onClose: () => setState(() => _showEmojiPicker = false),
+            ),
 
           Container(
             padding: const EdgeInsets.all(8),
@@ -2804,7 +2751,7 @@ Future<void> _openLink(String url) async {
                   IconButton(
                     icon: const Icon(Icons.add, color: Colors.white70),
                     onPressed: (_canSend && !_isAnnouncementsOnly && !(_isBlocked && !_isGroup))
-                      ? () => _showAttachmentMenu(context) 
+                      ? () => _showAttachmentMenu(context)
                       : null,
                   ),
                   IconButton(
@@ -2846,14 +2793,12 @@ Future<void> _openLink(String url) async {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Mic or Send button — PERFECT FIX: ValueListenableBuilder for instant toggle
                   ValueListenableBuilder<bool>(
                     valueListenable: _hasText,
                     builder: (context, hasText, child) {
                       final isDisabled = (_isBlocked && !_isGroup) || !_canSend || _isAnnouncementsOnly;
-                      
+
                       if (!hasText && !_isRecording) {
-                        // MIC BUTTON
                         return GestureDetector(
                           onLongPressStart: isDisabled ? null : (_) => _startRecording(),
                           onLongPressEnd: isDisabled ? null : (_) => _stopRecordingAndSend(),
@@ -2873,7 +2818,6 @@ Future<void> _openLink(String url) async {
                           ),
                         );
                       } else if (!_isRecording) {
-                        // SEND BUTTON
                         return Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -2903,7 +2847,6 @@ Future<void> _openLink(String url) async {
     );
   }
 
-  /// Search AppBar
   PreferredSizeWidget _buildSearchAppBar() {
     return AppBar(
       backgroundColor: const Color(0xFF0A0A0F),
@@ -3022,10 +2965,10 @@ Future<void> _openLink(String url) async {
       ),
     );
   }
-  
-    Widget _buildMessageBubble(BuildContext context, {
-    required Map<String, dynamic> message, 
-    required bool isMe, 
+
+  Widget _buildMessageBubble(BuildContext context, {
+    required Map<String, dynamic> message,
+    required bool isMe,
     required bool showAvatar,
     required bool isDeleted,
   }) {
@@ -3037,16 +2980,15 @@ Future<void> _openLink(String url) async {
     final Map<String, dynamic>? user = rawUser is Map<String, dynamic> ? rawUser : null;
     final isEdited = message['is_edited'] == true;
     final senderId = message['sender_id'] as String?;
-    final senderEmail = user?['email'] as String?; 
+    final senderEmail = user?['email'] as String?;
     final reactions = Map<String, dynamic>.from(message['reactions'] ?? {});
 
-    // FIX: More space between messages
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: EdgeInsets.only(
-          bottom: reactions.isNotEmpty ? 16 : 8,  // FIX: Extra space for reactions
-          left: isMe ? 64 : (showAvatar ? 8 : 40), 
+          bottom: reactions.isNotEmpty ? 16 : 8,
+          left: isMe ? 64 : (showAvatar ? 8 : 40),
           right: isMe ? 8 : 64,
           top: 2,
         ),
@@ -3058,9 +3000,9 @@ Future<void> _openLink(String url) async {
               GestureDetector(
                 onTap: senderId != null
                   ? () => Navigator.pushNamed(context, '/public_profile', arguments: {
-                      'userId': senderId, 
-                      'username': user?['username'], 
-                      'avatar_url': user?['avatar_url'], 
+                      'userId': senderId,
+                      'username': user?['username'],
+                      'avatar_url': user?['avatar_url'],
                       'bio': user?['bio'],
                     })
                   : null,
@@ -3070,7 +3012,6 @@ Future<void> _openLink(String url) async {
 
             Flexible(
               child: GestureDetector(
-                // FIX: Double-tap shows quick reaction bar instead of full picker
                 onDoubleTap: () => _showReactionPicker(message['id']),
                 onLongPress: () => _showMessageOptions(message, isMe),
                 child: Stack(
@@ -3093,14 +3034,13 @@ Future<void> _openLink(String url) async {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // FIX: Show sender name for ALL non-me messages in groups (not just when avatar shows)
                           if (_isGroup && !isMe)
                             GestureDetector(
                               onTap: senderId != null
                                 ? () => Navigator.pushNamed(context, '/public_profile', arguments: {
-                                    'userId': senderId, 
-                                    'username': user?['username'], 
-                                    'avatar_url': user?['avatar_url'], 
+                                    'userId': senderId,
+                                    'username': user?['username'],
+                                    'avatar_url': user?['avatar_url'],
                                     'bio': user?['bio'],
                                   })
                                 : null,
@@ -3108,13 +3048,13 @@ Future<void> _openLink(String url) async {
                                 padding: const EdgeInsets.only(bottom: 4),
                                 child: VerifiedUsername(
                                   username: user?['username'] ?? (senderId != null ? 'Loading...' : 'Unknown'),
-                                  email: senderEmail, 
+                                  email: senderEmail,
                                   style: TextStyle(
-                                    fontSize: 12, 
-                                    fontWeight: FontWeight.w600, 
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
                                     color: const Color(0xFF8B5CF6).withOpacity(0.9),
                                   ),
-                                  badgeSize: 12, 
+                                  badgeSize: 12,
                                   spacing: 4,
                                 ),
                               ),
@@ -3165,19 +3105,19 @@ Future<void> _openLink(String url) async {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(14),
                                 child: CachedNetworkImage(
-                                  imageUrl: mediaUrl, 
-                                  width: 200, 
-                                  height: 200, 
+                                  imageUrl: mediaUrl,
+                                  width: 200,
+                                  height: 200,
                                   fit: BoxFit.cover,
                                   placeholder: (context, url) => Container(
-                                    width: 200, 
-                                    height: 200, 
+                                    width: 200,
+                                    height: 200,
                                     color: Colors.white.withOpacity(0.1),
                                     child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Color(0xFF8B5CF6)))),
                                   ),
                                   errorWidget: (context, url, error) => Container(
-                                    width: 200, 
-                                    height: 200, 
+                                    width: 200,
+                                    height: 200,
                                     color: Colors.white.withOpacity(0.1),
                                     child: const Icon(Icons.error, color: Colors.white54),
                                   ),
@@ -3195,10 +3135,10 @@ Future<void> _openLink(String url) async {
                             _buildVideoBubble(videoUrl: mediaUrl, isMe: isMe)
                           else if (type == 'file')
                             _buildFileMessage(
-                              content: content, 
-                              mediaUrl: mediaUrl, 
-                              fileName: message['file_name'], 
-                              fileSize: message['file_size'], 
+                              content: content,
+                              mediaUrl: mediaUrl,
+                              fileName: message['file_name'],
+                              fileSize: message['file_size'],
                               isMe: isMe,
                             )
                           else if (type == 'link_preview' && mediaUrl != null)
@@ -3213,34 +3153,28 @@ Future<void> _openLink(String url) async {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                DateFormat('HH:mm').format(createdAt), 
+                                DateFormat('HH:mm').format(createdAt),
                                 style: TextStyle(
-                                  fontSize: 10, 
+                                  fontSize: 10,
                                   color: isMe ? Colors.white.withOpacity(0.7) : Colors.white.withOpacity(0.4),
                                 ),
                               ),
                               if (isEdited && !isDeleted) ...[
                                 const SizedBox(width: 4),
                                 Text(
-                                  'edited', 
+                                  'edited',
                                   style: TextStyle(
-                                    fontSize: 10, 
-                                    color: isMe ? Colors.white.withOpacity(0.5) : Colors.white.withOpacity(0.3), 
+                                    fontSize: 10,
+                                    color: isMe ? Colors.white.withOpacity(0.5) : Colors.white.withOpacity(0.3),
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
                               ],
                               if (isMe && !isDeleted) ...[
                                 const SizedBox(width: 4),
-                                // FIX: added blue (#06B6D4) color for the read
-                                // state, matching the website's exact CSS
-                                // (.tick.read { color: #06B6D4; }). Previously
-                                // both states used shades of white/grey only,
-                                // so there was no clear visual distinction
-                                // between "delivered" and "read".
                                 Icon(
-                                  message['is_read'] == true ? Icons.done_all : Icons.done, 
-                                  size: 14, 
+                                  message['is_read'] == true ? Icons.done_all : Icons.done,
+                                  size: 14,
                                   color: message['is_read'] == true
                                       ? const Color(0xFF06B6D4)
                                       : Colors.white.withOpacity(0.6),
@@ -3252,7 +3186,6 @@ Future<void> _openLink(String url) async {
                       ),
                     ),
 
-                    // FIX: Reaction bar with count + "more" button
                     if (reactions.isNotEmpty)
                       Positioned(
                         bottom: -12,
@@ -3271,7 +3204,6 @@ Future<void> _openLink(String url) async {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Show max 5 reactions, then "more" button
                                 ...reactions.entries.take(5).map((entry) {
                                   final emoji = entry.key;
                                   final count = (entry.value as List).length;
@@ -3390,7 +3322,7 @@ Future<void> _openLink(String url) async {
   }
 
   Widget _buildVideoBubble({required String videoUrl, required bool isMe}) {
-       if (!_videoControllers.containsKey(videoUrl)) {
+    if (!_videoControllers.containsKey(videoUrl)) {
       final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
       controller.initialize().then((_) { if (mounted) setState(() {}); });
       _videoControllers[videoUrl] = controller;
@@ -3426,8 +3358,8 @@ Future<void> _openLink(String url) async {
       ),
     );
   }
-  
-    void _openFullScreenVideo(String videoUrl) {
+
+  void _openFullScreenVideo(String videoUrl) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -3440,168 +3372,165 @@ Future<void> _openLink(String url) async {
       ),
     );
   }
-  
-  Widget _buildLinkPreviewBubble({
-  required String link,
-  required Map<String, dynamic> previewData,
-  required bool isMe,
-}) {
-  final title = previewData['title'] ?? 'Join Group';
-  final description = previewData['description'] ?? '';
-  final imageUrl = previewData['image_url'] as String?;
-  final memberCount = previewData['member_count'] ?? 0;
-  final chatType = previewData['type'] ?? 'group';
 
-  return GestureDetector(
-    onTap: () {
-      // Handle link tap
-      final uri = Uri.parse(link);
-      final code = uri.pathSegments.last;
-      Navigator.pushNamed(context, '/invitation', arguments: {
-        'code': code,
-      });
-    },
-    child: Container(
-      width: 260,
-      decoration: BoxDecoration(
-        color: isMe ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Group image
-          if (imageUrl != null)
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
+  Widget _buildLinkPreviewBubble({
+    required String link,
+    required Map<String, dynamic> previewData,
+    required bool isMe,
+  }) {
+    final title = previewData['title'] ?? 'Join Group';
+    final description = previewData['description'] ?? '';
+    final imageUrl = previewData['image_url'] as String?;
+    final memberCount = previewData['member_count'] ?? 0;
+    final chatType = previewData['type'] ?? 'group';
+
+    return GestureDetector(
+      onTap: () {
+        final uri = Uri.parse(link);
+        final code = uri.pathSegments.last;
+        Navigator.pushNamed(context, '/invitation', arguments: {
+          'code': code,
+        });
+      },
+      child: Container(
+        width: 260,
+        decoration: BoxDecoration(
+          color: isMe ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (imageUrl != null)
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  width: 260,
+                  height: 140,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    width: 260,
+                    height: 140,
+                    color: Colors.white.withOpacity(0.05),
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    width: 260,
+                    height: 140,
+                    color: const Color(0xFF1a103c),
+                    child: Icon(
+                      chatType == 'channel' ? Icons.campaign : Icons.group,
+                      size: 50,
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Container(
                 width: 260,
                 height: 140,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
-                  width: 260,
-                  height: 140,
-                  color: Colors.white.withOpacity(0.05),
-                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                ),
-                errorWidget: (_, __, ___) => Container(
-                  width: 260,
-                  height: 140,
+                decoration: BoxDecoration(
                   color: const Color(0xFF1a103c),
-                  child: Icon(
-                    chatType == 'channel' ? Icons.campaign : Icons.group,
-                    size: 50,
-                    color: const Color(0xFF8B5CF6),
-                  ),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Icon(
+                  chatType == 'channel' ? Icons.campaign : Icons.group,
+                  size: 50,
+                  color: const Color(0xFF8B5CF6),
                 ),
               ),
-            )
-          else
-            Container(
-              width: 260,
-              height: 140,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1a103c),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Icon(
-                chatType == 'channel' ? Icons.campaign : Icons.group,
-                size: 50,
-                color: const Color(0xFF8B5CF6),
-              ),
-            ),
-          
-          // Content
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        chatType.toUpperCase(),
-                        style: const TextStyle(
-                          color: Color(0xFF8B5CF6),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          chatType.toUpperCase(),
+                          style: const TextStyle(
+                            color: Color(0xFF8B5CF6),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$memberCount members',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (description.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 12,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.login, color: Colors.white, size: 16),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Text(
-                        'Join Group',
+                        '$memberCount members',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 11,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.login, color: Colors.white, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Join Group',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildFileMessage({required String content, required String? mediaUrl, required String? fileName, required String? fileSize, required bool isMe}) {
     return GestureDetector(
@@ -3736,7 +3665,7 @@ Future<void> _openLink(String url) async {
         ],
       ),
     );
-  }     
+  }
 
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
@@ -3744,7 +3673,7 @@ Future<void> _openLink(String url) async {
     if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
-}  
+}
 
 class _FullScreenVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -3893,6 +3822,6 @@ class _FullScreenVideoPlayerState extends State<_FullScreenVideoPlayer> {
           ],
         ],
       ),
-    );    
+    );
   }
-}    
+}
