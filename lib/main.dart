@@ -26,7 +26,6 @@ import 'screens/chat/chat_screen.dart';
 import 'screens/bot/bot_chat_screen.dart';
 import 'screens/bot/bot_creator_screen.dart';
 import 'screens/bot/bot_profile_screen.dart';
-// NOTE: bot_store_screen.dart was deleted — its import and route were removed.
 import 'screens/settings/privacy_settings_screen.dart';
 import 'screens/settings/security_screen.dart';
 import 'screens/settings/blocked_users_screen.dart';
@@ -66,32 +65,36 @@ import 'services/call_service.dart';
 import 'services/call_signaling_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Global navigator key for navigation from background/notification handlers
+// Global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  print('Background message: ${message.messageId}');
+  try {
+    await Firebase.initializeApp();
+    debugPrint('Background message: ${message.messageId}');
 
-  final data = message.data;
-  final type = data['type'] as String?;
+    final data = message.data;
+    final type = data['type'] as String?;
 
-  if (type == 'call') {
-    final callService = CallNotificationService();
-    await callService.initialize();
+    if (type == 'call') {
+      final callService = CallNotificationService();
+      await callService.initialize();
 
-    final signal = CallSignal(
-      type: CallSignalType.incoming,
-      callId: data['call_id'],
-      callerId: data['caller_id'],
-      callerName: data['caller_name'],
-      callerAvatar: data['caller_avatar'],
-      channelName: data['channel_name'],
-      isVideoCall: data['is_video_call'] == 'true',
-    );
+      final signal = CallSignal(
+        type: CallSignalType.incoming,
+        callId: data['call_id'],
+        callerId: data['caller_id'],
+        callerName: data['caller_name'],
+        callerAvatar: data['caller_avatar'],
+        channelName: data['channel_name'],
+        isVideoCall: data['is_video_call'] == 'true',
+      );
 
-    await callService.showIncomingCallNotification(signal);
+      await callService.showIncomingCallNotification(signal);
+    }
+  } catch (e) {
+    debugPrint('Background handler error (non-fatal): $e');
   }
 }
 
@@ -107,18 +110,50 @@ void main() async {
     WidgetsFlutterBinding.ensureInitialized();
     await Firebase.initializeApp();
 
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    // ─── FCM background handler ─────────────────────────────────
+    try {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    } catch (e) {
+      debugPrint('FCM background handler registration error: $e');
+    }
 
-    await NotificationService.init();
-    await NotificationService.requestPermission();
+    // ─── Local notifications ────────────────────────────────────
+    try {
+      await NotificationService.init();
+      await NotificationService.requestPermission();
+    } catch (e) {
+      debugPrint('NotificationService init error (non-fatal): $e');
+    }
 
-    await CallNotificationService().initialize();
+    // ─── Call notification service ──────────────────────────────
+    try {
+      await CallNotificationService().initialize();
+    } catch (e) {
+      debugPrint('CallNotificationService init error (non-fatal): $e');
+    }
 
-    final pushService = PushNotificationService();
-    await pushService.initialize();
+    // ─── Push notification service (FCM token fetch) ────────────
+    // This was crashing on getToken() INTERNAL_SERVER_ERROR.
+    // Now wrapped so a failing FCM server can't kill the app.
+    try {
+      final pushService = PushNotificationService();
+      await pushService.initialize();
+    } catch (e) {
+      debugPrint('PushNotificationService init error (non-fatal): $e');
+    }
 
-    ConnectivityService().initialize();
-    CallService.initialize('8a2cea909f994b0d9e61146e99710277');
+    // ─── Other services ─────────────────────────────────────────
+    try {
+      ConnectivityService().initialize();
+    } catch (e) {
+      debugPrint('ConnectivityService error (non-fatal): $e');
+    }
+
+    try {
+      CallService.initialize('8a2cea909f994b0d9e61146e99710277');
+    } catch (e) {
+      debugPrint('CallService init error (non-fatal): $e');
+    }
 
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -136,7 +171,6 @@ void main() async {
 
     runApp(const AuraChatApp());
     return;
-
   } catch (e, stack) {
     startupError = e.toString();
     startupStack = stack.toString();
@@ -227,7 +261,7 @@ class ErrorApp extends StatelessWidget {
 }
 
 // ============================================================================
-// AUTH ROUTER — SplashScreen → route by auth state
+// AUTH ROUTER
 // ============================================================================
 class AuthRouter extends StatefulWidget {
   const AuthRouter({super.key});
@@ -273,14 +307,13 @@ class _AuthRouterState extends State<AuthRouter> {
     final oldPendingEmailUserId = prefs.getString('pending_email_user_id');
     final oldPendingEmailVerification =
         prefs.getBool('pending_email_verification') ?? false;
-    final oldPendingEmailTimestamp =
-        prefs.getInt('pending_email_timestamp');
+    final oldPendingEmailTimestamp = prefs.getInt('pending_email_timestamp');
 
     if (oldPendingEmailUserId != null &&
         oldPendingEmailVerification &&
         oldPendingEmailTimestamp != null) {
-      final emailAge = DateTime.now().millisecondsSinceEpoch -
-          oldPendingEmailTimestamp;
+      final emailAge =
+          DateTime.now().millisecondsSinceEpoch - oldPendingEmailTimestamp;
       if (emailAge < 30 * 60 * 1000) {
         setState(() {
           _targetScreen = const EmailVerificationScreen();
@@ -300,6 +333,13 @@ class _AuthRouterState extends State<AuthRouter> {
     if (currentUser != null || mockUserId != null) {
       final userId = currentUser?.uid ?? mockUserId!;
 
+      // Refresh FCM token now that user is known (wrapped, non-fatal)
+      try {
+        await PushNotificationService().refreshToken();
+      } catch (e) {
+        debugPrint('FCM refresh after login failed (non-fatal): $e');
+      }
+
       try {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -311,8 +351,7 @@ class _AuthRouterState extends State<AuthRouter> {
             (data?['username'] as String).trim().isNotEmpty;
         final hasDisplayName = data?['display_name'] != null &&
             (data?['display_name'] as String).trim().isNotEmpty;
-        final hasProfile =
-            userDoc.exists && hasUsername && hasDisplayName;
+        final hasProfile = userDoc.exists && hasUsername && hasDisplayName;
 
         final createdAt = data?['created_at'];
         final bool isVeryNew = createdAt == null;
@@ -426,8 +465,7 @@ class AuraChatApp extends StatefulWidget {
   State<AuraChatApp> createState() => _AuraChatAppState();
 }
 
-class _AuraChatAppState extends State<AuraChatApp>
-    with WidgetsBindingObserver {
+class _AuraChatAppState extends State<AuraChatApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -529,7 +567,7 @@ class _AuraChatAppState extends State<AuraChatApp>
               '/main': (context) => const MainAppScreen(),
               '/chat': (context) => const ChatScreen(),
 
-              // ─── BOT ROUTES ──────────────────────────────────────
+              // ─── Bot routes ──────────────────────────────────
               '/bot': (context) {
                 final args = ModalRoute.of(context)?.settings.arguments
                     as Map<String, dynamic>?;
@@ -554,7 +592,6 @@ class _AuraChatAppState extends State<AuraChatApp>
                   editUsername: args?['editUsername'] as String?,
                 );
               },
-              // ─────────────────────────────────────────────────────
 
               '/privacy_settings': (context) =>
                   const PrivacySettingsScreen(),
