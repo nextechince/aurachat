@@ -23,7 +23,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   int _currentIndex = 0;
 
   // ═══════════════════════════════════════════════════════════════
-  // USER CACHE — for resolving direct-chat participants
+  // USER CACHE — resolves direct-chat participants
   // ═══════════════════════════════════════════════════════════════
   final Map<String, Map<String, dynamic>> _userCache = {};
   final Set<String> _inFlight = {};
@@ -57,7 +57,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // RESOLVE MY UID
+  // HELPERS
   // ═══════════════════════════════════════════════════════════════
   String get _myUid {
     final auth = Provider.of<AuraAuthProvider>(context, listen: false);
@@ -68,9 +68,6 @@ class _MainAppScreenState extends State<MainAppScreen>
     return FirebaseAuth.instance.currentUser?.uid ?? '';
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // FETCH OTHER USER (for direct chats)
-  // ═══════════════════════════════════════════════════════════════
   Future<void> _fetchOtherUser(String uid) async {
     if (uid.isEmpty) return;
     if (_userCache.containsKey(uid)) return;
@@ -106,7 +103,6 @@ class _MainAppScreenState extends State<MainAppScreen>
           'is_bot': false,
         };
       }
-
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('fetchOtherUser error ($uid): $e');
@@ -371,7 +367,6 @@ class _MainAppScreenState extends State<MainAppScreen>
         name = cached['display_name'] as String? ?? 'User';
         avatar = cached['avatar_url'] as String?;
       } else {
-        // Show a soft placeholder while loading (NOT "Unknown")
         name = 'Loading...';
         avatar = null;
       }
@@ -382,7 +377,7 @@ class _MainAppScreenState extends State<MainAppScreen>
 
     final lastMessage = chat['last_message'] ?? '';
 
-    // ─── Unread count (correct field!) ─────────────────────────
+    // ─── Unread count (correct field) ──────────────────────────
     final unreadCounts = chat['unread_counts'] as Map<String, dynamic>?;
     final unread = (unreadCounts?[myUid] as num?)?.toInt() ?? 0;
 
@@ -576,7 +571,7 @@ class _MainAppScreenState extends State<MainAppScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SHEETS (unchanged)
+  // NEW CHAT SHEET
   // ═══════════════════════════════════════════════════════════════
   void _showNewChatOptions(BuildContext context) {
     showModalBottomSheet(
@@ -622,6 +617,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // STATUS SHEET
+  // ═══════════════════════════════════════════════════════════════
   void _showAddStatusOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -657,6 +655,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // NEW CALL SHEET
+  // ═══════════════════════════════════════════════════════════════
   void _showNewCallOptions(BuildContext context) {
     final channelName = CallService.generateChannelName();
     showModalBottomSheet(
@@ -821,6 +822,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ⋮ MENU
+  // ═══════════════════════════════════════════════════════════════
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -974,6 +978,9 @@ class _MainAppScreenState extends State<MainAppScreen>
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // SHARED UI
+  // ═══════════════════════════════════════════════════════════════
   Widget _handle() {
     return Center(
       child: Container(
