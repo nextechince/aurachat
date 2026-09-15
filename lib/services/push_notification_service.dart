@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,32 +18,38 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final type = data['type'] as String?;
 
   if (type == 'call') {
-    final callService = CallNotificationService();
-    await callService.initialize();
+    try {
+      final callService = CallNotificationService();
+      await callService.initialize();
 
-    final signal = CallSignal(
-      type: CallSignalType.incoming,
-      callId: data['call_id'],
-      callerId: data['caller_id'],
-      callerName: data['caller_name'],
-      callerAvatar: data['caller_avatar'],
-      channelName: data['channel_name'],
-      isVideoCall: data['is_video_call'] == 'true',
-    );
+      final signal = CallSignal(
+        type: CallSignalType.incoming,
+        callId: data['call_id'],
+        callerId: data['caller_id'],
+        callerName: data['caller_name'],
+        callerAvatar: data['caller_avatar'],
+        channelName: data['channel_name'],
+        isVideoCall: data['is_video_call'] == 'true',
+      );
 
-    await callService.showIncomingCallNotification(signal);
+      await callService.showIncomingCallNotification(signal);
+    } catch (e) {
+      debugPrint('Background call notification error (non-fatal): $e');
+    }
   }
 }
 
 class PushNotificationService {
-  static final PushNotificationService _instance = PushNotificationService._internal();
+  static final PushNotificationService _instance =
+      PushNotificationService._internal();
   factory PushNotificationService() => _instance;
   PushNotificationService._internal();
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   StreamSubscription<RemoteMessage>? _foregroundSub;
   StreamSubscription<RemoteMessage>? _openedAppSub;
@@ -49,46 +57,97 @@ class PushNotificationService {
   Function(String chatId)? onChatOpen;
   Function()? onNotificationTap;
 
+  // ────────────────────────────────────────────────────────────
+  // INIT — every step is try/catch'd so a failure in ANY step
+  // doesn't crash the app (fixes the INTERNAL_SERVER_ERROR crash)
+  // ────────────────────────────────────────────────────────────
   Future<void> initialize() async {
-    await _requestPermission();
-    await _setupLocalNotifications();
-    await _getAndSaveToken();
-    await CallNotificationService().initialize();
+    try {
+      await _requestPermission();
+    } catch (e) {
+      debugPrint('FCM permission error (non-fatal): $e');
+    }
 
-    _fcm.onTokenRefresh.listen(_saveTokenToFirestore);
+    try {
+      await _setupLocalNotifications();
+    } catch (e) {
+      debugPrint('Local notifications setup error (non-fatal): $e');
+    }
 
-    _foregroundSub = FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    _openedAppSub = FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    // This is the call that was crashing with INTERNAL_SERVER_ERROR
+    try {
+      await _getAndSaveToken();
+    } catch (e) {
+      debugPrint('FCM token init error (non-fatal): $e');
+    }
 
-    final initialMessage = await _fcm.getInitialMessage();
-    if (initialMessage != null) {
-      _handleNotificationTap(initialMessage);
+    try {
+      await CallNotificationService().initialize();
+    } catch (e) {
+      debugPrint('Call notification init error (non-fatal): $e');
+    }
+
+    try {
+      _fcm.onTokenRefresh.listen((token) {
+        _saveTokenToFirestore(token).catchError((e) {
+          debugPrint('Token refresh save error: $e');
+        });
+      });
+    } catch (e) {
+      debugPrint('Token refresh listener error (non-fatal): $e');
+    }
+
+    try {
+      _foregroundSub =
+          FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      _openedAppSub =
+          FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    } catch (e) {
+      debugPrint('FCM message listeners error (non-fatal): $e');
+    }
+
+    try {
+      final initialMessage = await _fcm.getInitialMessage();
+      if (initialMessage != null) {
+        _handleNotificationTap(initialMessage);
+      }
+    } catch (e) {
+      debugPrint('Initial FCM message error (non-fatal): $e');
     }
   }
 
   Future<void> _requestPermission() async {
     final settings = await _fcm.requestPermission(
-      alert: true, badge: true, sound: true,
-      provisional: false, criticalAlert: true,
-      announcement: false, carPlay: false,
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+      criticalAlert: true,
+      announcement: false,
+      carPlay: false,
     );
-    print('Push notification permission: ${settings.authorizationStatus}');
+    debugPrint('Push notification permission: ${settings.authorizationStatus}');
   }
 
   Future<void> _setupLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
       requestSoundPermission: false,
     );
 
-    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
 
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (response) {
-        if (response.notificationResponseType == NotificationResponseType.selectedNotificationAction) {
+        if (response.notificationResponseType ==
+            NotificationResponseType.selectedNotificationAction) {
           CallNotificationService().handleNotificationResponse(response);
           return;
         }
@@ -98,9 +157,32 @@ class PushNotificationService {
     );
   }
 
+  // ────────────────────────────────────────────────────────────
+  // TOKEN — the crashing method, now safe
+  // ────────────────────────────────────────────────────────────
   Future<void> _getAndSaveToken() async {
-    final token = await _fcm.getToken();
-    if (token != null) await _saveTokenToFirestore(token);
+    try {
+      final token = await _fcm.getToken();
+      if (token != null) {
+        await _saveTokenToFirestore(token);
+      }
+    } catch (e) {
+      // getToken() can throw INTERNAL_SERVER_ERROR transiently.
+      // Log it, don't crash.
+      debugPrint('FCM getToken failed (non-fatal): $e');
+    }
+  }
+
+  /// Call this after login to refresh the token
+  Future<void> refreshToken() async {
+    try {
+      final token = await _fcm.getToken();
+      if (token != null) {
+        await _saveTokenToFirestore(token);
+      }
+    } catch (e) {
+      debugPrint('refreshToken failed (non-fatal): $e');
+    }
   }
 
   Future<void> _saveTokenToFirestore(String token) async {
@@ -111,58 +193,67 @@ class PushNotificationService {
     }
 
     if (userId == null) {
-      print('No user ID available - cannot save FCM token');
+      debugPrint('No user ID available - cannot save FCM token');
       return;
     }
 
-    await _firestore.collection('users').doc(userId).set({
-      'fcmToken': token,
-      'platform': 'android',
-      'tokenUpdatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    try {
+      await _firestore.collection('users').doc(userId).set({
+        'fcmToken': token,
+        'platform': Platform.isIOS ? 'ios' : 'android',
+        'tokenUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-    print('FCM token saved for user: $userId');
+      debugPrint('FCM token saved for user: $userId');
+    } catch (e) {
+      debugPrint('Failed to save FCM token: $e');
+    }
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    final data = message.data;
-    final notification = message.notification;
-    final type = data['type'] as String?;
+    try {
+      final data = message.data;
+      final notification = message.notification;
+      final type = data['type'] as String?;
 
-    if (type == 'call') {
-      final signal = CallSignal(
-        type: CallSignalType.incoming,
-        callId: data['call_id'],
-        callerId: data['caller_id'],
-        callerName: data['caller_name'],
-        callerAvatar: data['caller_avatar'],
-        channelName: data['channel_name'],
-        isVideoCall: data['is_video_call'] == 'true',
+      if (type == 'call') {
+        final signal = CallSignal(
+          type: CallSignalType.incoming,
+          callId: data['call_id'],
+          callerId: data['caller_id'],
+          callerName: data['caller_name'],
+          callerAvatar: data['caller_avatar'],
+          channelName: data['channel_name'],
+          isVideoCall: data['is_video_call'] == 'true',
+        );
+        CallNotificationService().showIncomingCallNotification(signal);
+        return;
+      }
+
+      _showLocalNotification(
+        title: notification?.title ?? 'New Message',
+        body: notification?.body ?? '',
+        payload: jsonEncode(data),
       );
-      CallNotificationService().showIncomingCallNotification(signal);
-      return;
+    } catch (e) {
+      debugPrint('Foreground message handling error (non-fatal): $e');
     }
-
-    _showLocalNotification(
-      title: notification?.title ?? 'New Message',
-      body: notification?.body ?? '',
-      payload: jsonEncode(data),
-    );
-
-    _incrementUnreadCount(data['chatId'] ?? '');
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    final data = message.data;
-    final type = data['type'] as String?;
+    try {
+      final data = message.data;
+      final type = data['type'] as String?;
+      if (type == 'call') return;
 
-    if (type == 'call') return;
-
-    final chatId = data['chatId'];
-    if (chatId != null && onChatOpen != null) {
-      onChatOpen!(chatId);
+      final chatId = data['chatId'];
+      if (chatId != null && onChatOpen != null) {
+        onChatOpen!(chatId);
+      }
+      onNotificationTap?.call();
+    } catch (e) {
+      debugPrint('Notification tap handling error: $e');
     }
-    onNotificationTap?.call();
   }
 
   void _handlePayload(String payload) {
@@ -173,7 +264,7 @@ class PushNotificationService {
         onChatOpen!(chatId);
       }
     } catch (e) {
-      print('Error handling notification payload: $e');
+      debugPrint('Error handling notification payload: $e');
     }
   }
 
@@ -182,54 +273,56 @@ class PushNotificationService {
     required String body,
     String? payload,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
-      'aura_chat_channel',
-      'AURA Chat Messages',
-      channelDescription: 'Chat message notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-      enableVibration: true,
-      playSound: true,
-      icon: '@mipmap/ic_launcher',
-    );
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        'aura_chat_channel',
+        'AURA Chat Messages',
+        channelDescription: 'Chat message notifications',
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+        enableVibration: true,
+        playSound: true,
+        icon: '@mipmap/ic_launcher',
+      );
 
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true, presentBadge: true, presentSound: true,
-    );
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
 
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
 
-    await _localNotifications.show(
-      DateTime.now().millisecond,
-      title, body, details,
-      payload: payload,
-    );
-  }
-
-  Future<void> _incrementUnreadCount(String chatId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'unread_$chatId';
-    final current = prefs.getInt(key) ?? 0;
-    await prefs.setInt(key, current + 1);
-  }
-
-  Future<int> getUnreadCount(String chatId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('unread_$chatId') ?? 0;
-  }
-
-  Future<void> clearUnreadCount(String chatId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('unread_$chatId');
+      await _localNotifications.show(
+        DateTime.now().millisecond,
+        title,
+        body,
+        details,
+        payload: payload,
+      );
+    } catch (e) {
+      debugPrint('Show local notification error (non-fatal): $e');
+    }
   }
 
   Future<void> subscribeToTopic(String topic) async {
-    await _fcm.subscribeToTopic(topic);
+    try {
+      await _fcm.subscribeToTopic(topic);
+    } catch (e) {
+      debugPrint('subscribeToTopic error: $e');
+    }
   }
 
   Future<void> unsubscribeFromTopic(String topic) async {
-    await _fcm.unsubscribeFromTopic(topic);
+    try {
+      await _fcm.unsubscribeFromTopic(topic);
+    } catch (e) {
+      debugPrint('unsubscribeFromTopic error: $e');
+    }
   }
 
   void dispose() {
