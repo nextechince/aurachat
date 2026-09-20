@@ -34,7 +34,26 @@ import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_emoji_picker.dart';
 
-
+/// NOTE ON THIS UPDATE
+/// --------------------
+/// Added vs previous version:
+/// 1. Stickers — a "Stickers" tab next to the emoji tab. Stickers are
+///    created from a gallery photo (uploaded via Cloudinary) and stored per
+///    user in Firestore at users/{uid}/stickers, so they persist and sync
+///    across devices. Tap any sticker to send it as a transparent,
+///    borderless bubble (message type 'sticker').
+/// 2. Glassmorphism — the app bar, the input bar, the reply bar and the
+///    emoji/sticker panel now use a frosted-glass BackdropFilter blur over a
+///    translucent surface instead of flat solid colors, matching the web
+///    chat screen.
+/// 3. Functional call buttons — the call/video icons in the app bar now
+///    generate a real call channel (CallService.generateChannelName()) and
+///    push CallScreen.active(...), so a call can be started directly from
+///    the chat rather than only from the Calls tab.
+/// 4. "Clear chat" support — if the chat document has a cleared_at map
+///    (written by the main chats list when a user picks "Clear Messages"),
+///    messages created at or before that per-user timestamp are hidden for
+///    that user, both on initial load and in the realtime listener.
 class ChatScreen extends StatefulWidget {
   final String? chatId;
   final String? chatName;
@@ -492,7 +511,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
         // NEW: per-user clear-chat cutoff, written by the chats list's
         // "Clear Messages" action as cleared_at.{uid}.
         final clearedMap = data['cleared_at'] as Map<String, dynamic>?;
-        final clearedTs = userId != null ? clearedMap?[userId] as Timestamp? : null;
+        final clearedTs = userId != null ? (clearedMap?[userId] as Timestamp?) : null;
         _clearedAt = clearedTs?.toDate();
 
         if (mounted) {
@@ -551,7 +570,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Ti
         final userId = authProvider.user?.uid ?? authProvider.mockUserId;
 
         final clearedMap = data['cleared_at'] as Map<String, dynamic>?;
-        final clearedTs = userId != null ? clearedMap?[userId] as Timestamp? : null;
+        final clearedTs = userId != null ? (clearedMap?[userId] as Timestamp?) : null;
         _clearedAt = clearedTs?.toDate();
 
         setState(() {
