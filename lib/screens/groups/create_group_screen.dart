@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -27,6 +28,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   List<Map<String, dynamic>> _selectedMembers = [];
   List<Map<String, dynamic>> _searchResults = [];
   String? _generatedLink;
+  String? _generatedCode;
 
   static const Color _bgDark = Color(0xFF0A0A0F);
   static const Color _bgCard = Color(0xFF1a103c);
@@ -205,7 +207,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               ? _inviteNameController.text.trim()
               : null,
         );
-        setState(() => _generatedLink = inviteResult['link'] as String?);
+        setState(() {
+          _generatedLink = inviteResult['link'] as String?;
+          _generatedCode = inviteResult['code'] as String?;
+        });
       } catch (e) {
         debugPrint('Invitation creation failed: $e');
       }
@@ -214,14 +219,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
       setState(() => _isLoading = false);
 
-      if (mounted) {
+      if (mounted && _generatedLink == null) {
+        // No link banner to show — just confirm and leave, as before.
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Group created successfully!'),
-          ),
+          const SnackBar(content: Text('Group created successfully!')),
         );
         Navigator.pop(context);
       }
+      // If a link WAS generated, stay on screen so the rich preview card
+      // (built below) is visible before the user backs out.
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -238,6 +244,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
+    );
+  }
+
+  void _copyLink() {
+    if (_generatedLink == null) return;
+    Clipboard.setData(ClipboardData(text: _generatedLink!));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link copied')),
     );
   }
 
@@ -289,10 +303,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    else
+                    else if (_generatedLink == null)
                       TextButton(
                         onPressed: _createGroup,
                         child: const Text('Create', style: TextStyle(color: _cyan, fontWeight: FontWeight.bold)),
+                      )
+                    else
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Done', style: TextStyle(color: _cyan, fontWeight: FontWeight.bold)),
                       ),
                   ],
                 ),
@@ -307,169 +326,151 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       // Photo upload
                       Center(
                         child: GestureDetector(
-                          onTap: _pickGroupPhoto,
+                          onTap: _generatedLink == null ? _pickGroupPhoto : null,
                           child: Stack(
                             children: [
                               _buildGroupAvatar(),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(colors: [_purple, _cyan]),
-                                    shape: BoxShape.circle,
+                              if (_generatedLink == null)
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(colors: [_purple, _cyan]),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
                                   ),
-                                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
                                 ),
-                              ),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Center(
-                        child: Text(
-                          'Tap to add photo',
-                          style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4)),
+                      if (_generatedLink == null)
+                        Center(
+                          child: Text(
+                            'Tap to add photo',
+                            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4)),
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 32),
 
-                      // Name field
-                      _buildGlassInput(
-                        label: 'Group Name',
-                        hint: 'Enter group name',
-                        icon: Icons.edit,
-                        controller: _nameController,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Description field
-                      _buildGlassInput(
-                        label: 'Description',
-                        hint: 'Add a description (optional)',
-                        icon: Icons.description,
-                        controller: _descriptionController,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Invite link name
-                      _buildGlassInput(
-                        label: 'Invitation Link Name',
-                        hint: 'e.g., my-awesome-group (optional)',
-                        icon: Icons.link,
-                        controller: _inviteNameController,
-                      ),
-                      const SizedBox(height: 16),
-
+                      // NEW: once the group + link exist, show the rich
+                      // Telegram-style preview card instead of the form.
                       if (_generatedLink != null) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green.withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Link: $_generatedLink',
-                                  style: const TextStyle(fontSize: 12, color: Colors.white),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
+                        _buildGeneratedLinkCard(),
+                        const SizedBox(height: 24),
+                      ] else ...[
+                        // Name field
+                        _buildGlassInput(
+                          label: 'Group Name',
+                          hint: 'Enter group name',
+                          icon: Icons.edit,
+                          controller: _nameController,
                         ),
-                      ],
-
-                      const SizedBox(height: 24),
-
-                      // Search users
-                      _buildGlassInput(
-                        label: 'Add Members',
-                        hint: 'Search users to add... (optional)',
-                        icon: Icons.search,
-                        controller: _searchController,
-                        onChanged: _searchUsers,
-                      ),
-
-                      // Selected members
-                      if (_selectedMembers.isNotEmpty) ...[
                         const SizedBox(height: 16),
-                        SizedBox(
-                          height: 90,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _selectedMembers.length,
-                            itemBuilder: (context, index) {
-                              final member = _selectedMembers[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: Column(
-                                  children: [
-                                    Stack(
-                                      children: [
-                                        _buildMemberAvatar(member['avatar_url'], member['username']),
-                                        Positioned(
-                                          top: 0,
-                                          right: 0,
-                                          child: GestureDetector(
-                                            onTap: () => _toggleMember(member),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(2),
-                                              decoration: const BoxDecoration(
-                                                color: Colors.red,
-                                                shape: BoxShape.circle,
+
+                        // Description field
+                        _buildGlassInput(
+                          label: 'Description',
+                          hint: 'Add a description (optional)',
+                          icon: Icons.description,
+                          controller: _descriptionController,
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Invite link name
+                        _buildGlassInput(
+                          label: 'Invitation Link Name',
+                          hint: 'e.g., my-awesome-group (optional)',
+                          icon: Icons.link,
+                          controller: _inviteNameController,
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Search users
+                        _buildGlassInput(
+                          label: 'Add Members',
+                          hint: 'Search users to add... (optional)',
+                          icon: Icons.search,
+                          controller: _searchController,
+                          onChanged: _searchUsers,
+                        ),
+
+                        // Selected members
+                        if (_selectedMembers.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 90,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _selectedMembers.length,
+                              itemBuilder: (context, index) {
+                                final member = _selectedMembers[index];
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 12),
+                                  child: Column(
+                                    children: [
+                                      Stack(
+                                        children: [
+                                          _buildMemberAvatar(member['avatar_url'], member['username']),
+                                          Positioned(
+                                            top: 0,
+                                            right: 0,
+                                            child: GestureDetector(
+                                              onTap: () => _toggleMember(member),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.red,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(Icons.close, size: 14, color: Colors.white),
                                               ),
-                                              child: const Icon(Icons.close, size: 14, color: Colors.white),
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      member['username'] ?? 'Unknown',
-                                      style: const TextStyle(fontSize: 12, color: Colors.white70),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        member['username'] ?? 'Unknown',
+                                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
 
-                      // Search results
-                      if (_searchResults.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        ..._searchResults.map((user) {
-                          final isSelected = _selectedMembers.any((m) => m['id'] == user['id']);
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.03),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              leading: _buildMemberAvatar(user['avatar_url'], user['username']),
-                              title: Text(user['username'] ?? 'Unknown', style: const TextStyle(color: Colors.white)),
-                              subtitle: Text(user['email'] ?? '', style: TextStyle(color: Colors.white.withOpacity(0.4))),
-                              trailing: isSelected
-                                  ? const Icon(Icons.check_circle, color: _purple)
-                                  : const Icon(Icons.add_circle_outline, color: Colors.white54),
-                              onTap: () => _toggleMember(user),
-                            ),
-                          );
-                        }).toList(),
+                        // Search results
+                        if (_searchResults.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          ..._searchResults.map((user) {
+                            final isSelected = _selectedMembers.any((m) => m['id'] == user['id']);
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.03),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ListTile(
+                                leading: _buildMemberAvatar(user['avatar_url'], user['username']),
+                                title: Text(user['username'] ?? 'Unknown', style: const TextStyle(color: Colors.white)),
+                                subtitle: Text(user['email'] ?? '', style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                                trailing: isSelected
+                                    ? const Icon(Icons.check_circle, color: _purple)
+                                    : const Icon(Icons.add_circle_outline, color: Colors.white54),
+                                onTap: () => _toggleMember(user),
+                              ),
+                            );
+                          }).toList(),
+                        ],
                       ],
                     ],
                   ),
@@ -478,6 +479,128 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// NEW: Telegram-style rich link card — the group's own avatar, its
+  /// real name, type badge and current member count, plus Copy / Share
+  /// actions for the invite link.
+  Widget _buildGeneratedLinkCard() {
+    final name = _nameController.text.trim().isEmpty ? 'Group' : _nameController.text.trim();
+    final memberCount = _selectedMembers.length + 1;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_purple.withOpacity(0.14), _cyan.withOpacity(0.08)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _purple.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 18),
+              const SizedBox(width: 8),
+              const Text('Group created', style: TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(colors: [_purple, _cyan]),
+                  border: Border.all(color: _purple.withOpacity(0.35), width: 2),
+                ),
+                child: (_groupPhotoUrl != null && _groupPhotoUrl!.isNotEmpty)
+                    ? ClipOval(child: Image.network(_groupPhotoUrl!, fit: BoxFit.cover))
+                    : Center(child: Text(name[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22))),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(children: const [
+                      Icon(Icons.group, size: 11, color: _purple),
+                      SizedBox(width: 4),
+                      Text('GROUP', style: TextStyle(color: _purple, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.6)),
+                    ]),
+                    const SizedBox(height: 2),
+                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text('$memberCount member${memberCount != 1 ? 's' : ''}', style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: Colors.black.withOpacity(0.25), borderRadius: BorderRadius.circular(10)),
+            child: Row(
+              children: [
+                const Icon(Icons.link, size: 14, color: Colors.white54),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _generatedLink ?? '',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _copyLink,
+                  icon: const Icon(Icons.copy, size: 16, color: Colors.white70),
+                  label: const Text('Copy Link', style: TextStyle(color: Colors.white70)),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.white.withOpacity(0.15)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // Hands the link off to the platform share sheet so the
+                    // group's rich preview shows up wherever it's shared.
+                    Clipboard.setData(ClipboardData(text: _generatedLink ?? ''));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Link copied — paste it anywhere to share')),
+                    );
+                  },
+                  icon: const Icon(Icons.share, size: 16, color: Colors.white),
+                  label: const Text('Share'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _purple,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
