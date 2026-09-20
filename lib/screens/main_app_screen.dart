@@ -1,8 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart' show AuraAuthProvider;
 import '../../providers/chat_provider.dart';
 import '../../screens/status/status_screen.dart';
@@ -22,11 +24,12 @@ class _MainAppScreenState extends State<MainAppScreen>
   late TabController _tabController;
   int _currentIndex = 0;
 
-
-  // USER CACHE — resolves direct-chat participants
-
   final Map<String, Map<String, dynamic>> _userCache = {};
   final Set<String> _inFlight = {};
+
+  // NEW: per-user block cache so tiles/long-press can show Block vs Unblock
+  // without a fresh network round trip on every open.
+  List<String> _myBlockedUsers = [];
 
   @override
   void initState() {
@@ -47,6 +50,8 @@ class _MainAppScreenState extends State<MainAppScreen>
       } else {
         chatProvider.loadChats();
       }
+
+      _listenToMyBlockedUsers();
     });
   }
 
@@ -56,9 +61,6 @@ class _MainAppScreenState extends State<MainAppScreen>
     super.dispose();
   }
 
-
-  // HELPERS
-
   String get _myUid {
     final auth = Provider.of<AuraAuthProvider>(context, listen: false);
     final fromProvider = auth.currentUserId ?? auth.mockUserId;
@@ -66,6 +68,17 @@ class _MainAppScreenState extends State<MainAppScreen>
       return fromProvider;
     }
     return FirebaseAuth.instance.currentUser?.uid ?? '';
+  }
+
+  void _listenToMyBlockedUsers() {
+    final uid = _myUid;
+    if (uid.isEmpty) return;
+    FirebaseFirestore.instance.collection('users').doc(uid).snapshots().listen((doc) {
+      if (!mounted || !doc.exists) return;
+      setState(() {
+        _myBlockedUsers = List<String>.from(doc.data()?['blocked_users'] ?? []);
+      });
+    });
   }
 
   Future<void> _fetchOtherUser(String uid) async {
@@ -120,8 +133,28 @@ class _MainAppScreenState extends State<MainAppScreen>
     }
   }
 
+  // NEW: format last_message_at into a real time/date label instead of
+  // a hardcoded "Now".
+  String _formatChatTime(dynamic lastMessageAt) {
+    if (lastMessageAt == null) return '';
+    DateTime dt;
+    if (lastMessageAt is Timestamp) {
+      dt = lastMessageAt.toDate();
+    } else if (lastMessageAt is DateTime) {
+      dt = lastMessageAt;
+    } else {
+      return '';
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final msgDay = DateTime(dt.year, dt.month, dt.day);
+    final diffDays = today.difference(msgDay).inDays;
 
-  // BUILD
+    if (diffDays == 0) return DateFormat('HH:mm').format(dt);
+    if (diffDays == 1) return 'Yesterday';
+    if (diffDays < 7) return DateFormat('EEE').format(dt);
+    return DateFormat('MMM d').format(dt);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -272,8 +305,7 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-
-  // CHATS TAB
+  // ==================== CHATS TAB ====================
 
   Widget _buildChatsTab() {
     return Consumer<ChatProvider>(
@@ -286,7 +318,20 @@ class _MainAppScreenState extends State<MainAppScreen>
           );
         }
 
-        if (chatProvider.chats.isEmpty) {
+        final myUid = _myUid;
+        // NEW: split out archived chats so the main list only shows active
+        // ones, while still surfacing an entry point to reach the archive.
+        final allChats = chatProvider.chats;
+        final archivedChats = allChats.where((c) {
+          final archivedFor = List<String>.from(c['archived_for'] ?? []);
+          return archivedFor.contains(myUid);
+        }).toList();
+        final visibleChats = allChats.where((c) {
+          final archivedFor = List<String>.from(c['archived_for'] ?? []);
+          return !archivedFor.contains(myUid);
+        }).toList();
+
+        if (allChats.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -319,17 +364,62 @@ class _MainAppScreenState extends State<MainAppScreen>
 
         return ListView.builder(
           padding: const EdgeInsets.only(top: 8),
-          itemCount: chatProvider.chats.length,
+          itemCount: visibleChats.length + (archivedChats.isNotEmpty ? 1 : 0),
           itemBuilder: (context, index) {
-            return _buildChatTile(chatProvider.chats[index]);
+            if (archivedChats.isNotEmpty && index == 0) {
+              return _buildArchivedRow(archivedChats.length);
+            }
+            final chatIndex = archivedChats.isNotEmpty ? index - 1 : index;
+            return _buildChatTile(visibleChats[chatIndex]);
           },
         );
       },
     );
   }
 
+  Widget _buildArchivedRow(int count) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.archive, color: Colors.white70, size: 20),
+        ),
+        title: const Text('Archived Chats', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(12)),
+          child: Text('$count', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+        onTap: _openArchivedChats,
+      ),
+    );
+  }
 
-  // CHAT TILE
+  void _openArchivedChats() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _ArchivedChatsScreen(
+          myUid: _myUid,
+          buildChatTile: _buildChatTile,
+        ),
+      ),
+    );
+  }
+
+  // ==================== CHAT TILE ====================
 
   Widget _buildChatTile(Map<String, dynamic> chat) {
     final chatId = chat['id'] as String? ?? '';
@@ -341,7 +431,6 @@ class _MainAppScreenState extends State<MainAppScreen>
 
     final myUid = _myUid;
 
-   
     String name;
     String? avatar;
     String? otherUserId;
@@ -354,7 +443,6 @@ class _MainAppScreenState extends State<MainAppScreen>
       );
 
       if (otherUserId.isNotEmpty && !_userCache.containsKey(otherUserId)) {
-        // Kick off async; setState will rebuild when it lands
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _fetchOtherUser(otherUserId!);
         });
@@ -377,11 +465,14 @@ class _MainAppScreenState extends State<MainAppScreen>
 
     final lastMessage = chat['last_message'] ?? '';
 
-    // ─── Unread count (correct field) ──────────────────────────
     final unreadCounts = chat['unread_counts'] as Map<String, dynamic>?;
     final unread = (unreadCounts?[myUid] as num?)?.toInt() ?? 0;
 
-    // ─── Route ─────────────────────────────────────────────────
+    // NEW: mute + block/archive state for this tile.
+    final mutedFor = List<String>.from(chat['muted_for'] ?? []);
+    final isMuted = mutedFor.contains(myUid);
+    final isBlockedByMe = isDirect && otherUserId != null && otherUserId.isNotEmpty && _myBlockedUsers.contains(otherUserId);
+
     String route;
     Map<String, dynamic> routeArgs;
     if (isBot) {
@@ -459,16 +550,22 @@ class _MainAppScreenState extends State<MainAppScreen>
             if (isChannel) _pill('CHANNEL', const Color(0xFF8B5CF6)),
             if (isGroup) _pill('GROUP', const Color(0xFF06B6D4)),
             if (isBot) _pill('BOT', const Color(0xFF8B5CF6)),
+            if (isMuted) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.notifications_off, size: 14, color: Colors.white.withOpacity(0.35)),
+            ],
           ],
         ),
         subtitle: Text(
-          lastMessage,
+          isBlockedByMe ? 'Blocked' : lastMessage,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: unread > 0
-                ? Colors.white.withOpacity(0.75)
-                : Colors.white.withOpacity(0.4),
+            color: isBlockedByMe
+                ? Colors.red.withOpacity(0.7)
+                : unread > 0
+                    ? Colors.white.withOpacity(0.75)
+                    : Colors.white.withOpacity(0.4),
             fontSize: 13,
             fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.normal,
           ),
@@ -478,7 +575,8 @@ class _MainAppScreenState extends State<MainAppScreen>
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              'Now',
+              // NEW: real formatted time instead of a hardcoded "Now".
+              _formatChatTime(chat['last_message_at']),
               style: TextStyle(
                 color: unread > 0
                     ? const Color(0xFF8B5CF6)
@@ -519,6 +617,16 @@ class _MainAppScreenState extends State<MainAppScreen>
         onTap: () {
           Navigator.pushNamed(context, route, arguments: routeArgs);
         },
+        // NEW: long-press opens the glassmorphism chat options sheet.
+        onLongPress: () => _showChatOptions(
+          chat: chat,
+          chatId: chatId,
+          isGroup: isGroup,
+          isChannel: isChannel,
+          isDirect: isDirect,
+          otherUserId: otherUserId,
+          name: name,
+        ),
       ),
     );
   }
@@ -570,8 +678,325 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
+  // ==================== CHAT LONG-PRESS OPTIONS (NEW) ====================
 
-  // NEW CHAT SHEET
+  Widget _glassSheet({required Widget child}) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a103c).withOpacity(0.85),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  void _showChatOptions({
+    required Map<String, dynamic> chat,
+    required String chatId,
+    required bool isGroup,
+    required bool isChannel,
+    required bool isDirect,
+    required String? otherUserId,
+    required String name,
+  }) {
+    final myUid = _myUid;
+    final archivedFor = List<String>.from(chat['archived_for'] ?? []);
+    final isArchived = archivedFor.contains(myUid);
+    final mutedFor = List<String>.from(chat['muted_for'] ?? []);
+    final isMuted = mutedFor.contains(myUid);
+    final isBlockedByMe = isDirect && otherUserId != null && otherUserId.isNotEmpty && _myBlockedUsers.contains(otherUserId);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _glassSheet(
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                _optionTile(
+                  icon: isMuted ? Icons.notifications_active : Icons.notifications_off,
+                  color: const Color(0xFFFBBF24),
+                  label: isMuted ? 'Unmute' : 'Mute',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _toggleMute(chatId, myUid, !isMuted);
+                  },
+                ),
+
+                if (isDirect) ...[
+                  _optionTile(
+                    icon: isBlockedByMe ? Icons.block_flipped : Icons.block,
+                    color: Colors.red,
+                    label: isBlockedByMe ? 'Unblock' : 'Block',
+                    danger: !isBlockedByMe,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      if (otherUserId != null && otherUserId.isNotEmpty) {
+                        _toggleBlock(otherUserId, !isBlockedByMe);
+                      }
+                    },
+                  ),
+                ],
+
+                if (isGroup || isChannel)
+                  _optionTile(
+                    icon: Icons.exit_to_app,
+                    color: Colors.red,
+                    label: isChannel ? 'Leave Channel' : 'Exit Group',
+                    danger: true,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _confirmExitGroup(chatId, myUid, isChannel);
+                    },
+                  ),
+
+                _optionTile(
+                  icon: isArchived ? Icons.unarchive : Icons.archive,
+                  color: const Color(0xFF06B6D4),
+                  label: isArchived ? 'Unarchive' : 'Archive',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _toggleArchive(chatId, myUid, !isArchived);
+                  },
+                ),
+
+                _optionTile(
+                  icon: Icons.cleaning_services,
+                  color: const Color(0xFF8B5CF6),
+                  label: 'Clear Messages',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _confirmClearMessages(chatId, myUid);
+                  },
+                ),
+
+                _optionTile(
+                  icon: Icons.delete_outline,
+                  color: Colors.red,
+                  label: 'Delete Chat',
+                  danger: true,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _confirmDeleteChat(chatId, myUid);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _optionTile({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: color.withOpacity(0.18), shape: BoxShape.circle),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: danger ? Colors.red : Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleMute(String chatId, String myUid, bool mute) async {
+    try {
+      await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
+        'muted_for': mute ? FieldValue.arrayUnion([myUid]) : FieldValue.arrayRemove([myUid]),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(mute ? 'Muted' : 'Unmuted')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Toggle mute error: $e');
+    }
+  }
+
+  Future<void> _toggleBlock(String otherUserId, bool block) async {
+    final myUid = _myUid;
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(myUid).update({
+        'blocked_users': block ? FieldValue.arrayUnion([otherUserId]) : FieldValue.arrayRemove([otherUserId]),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(block ? 'Blocked' : 'Unblocked')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Toggle block error: $e');
+    }
+  }
+
+  Future<void> _toggleArchive(String chatId, String myUid, bool archive) async {
+    try {
+      await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
+        'archived_for': archive ? FieldValue.arrayUnion([myUid]) : FieldValue.arrayRemove([myUid]),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(archive ? 'Chat archived' : 'Chat unarchived')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Toggle archive error: $e');
+    }
+  }
+
+  void _confirmClearMessages(String chatId, String myUid) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1a103c),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Clear messages?', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'This clears the message history for you only. The other participant(s) keep their copy.',
+          style: TextStyle(color: Colors.white.withOpacity(0.6)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.5)))),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                // Written as cleared_at.{uid}; the chat screen filters out
+                // any message created at/before this timestamp for this user.
+                await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
+                  'cleared_at.$myUid': FieldValue.serverTimestamp(),
+                });
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Messages cleared')));
+              } catch (e) {
+                debugPrint('Clear messages error: $e');
+              }
+            },
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteChat(String chatId, String myUid) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1a103c),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete chat?', style: TextStyle(color: Colors.white)),
+        content: Text('This removes the chat from your list.', style: TextStyle(color: Colors.white.withOpacity(0.6))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.5)))),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
+                  'deleted_for': FieldValue.arrayUnion([myUid]),
+                });
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat deleted')));
+              } catch (e) {
+                debugPrint('Delete chat error: $e');
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmExitGroup(String chatId, String myUid, bool isChannel) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1a103c),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isChannel ? 'Leave channel?' : 'Exit group?', style: const TextStyle(color: Colors.white)),
+        content: Text(
+          isChannel ? 'You will stop receiving posts from this channel.' : 'You will no longer be a member of this group.',
+          style: TextStyle(color: Colors.white.withOpacity(0.6)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: Colors.white.withOpacity(0.5)))),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
+                  'participants': FieldValue.arrayRemove([myUid]),
+                  'participants_data.$myUid': FieldValue.delete(),
+                });
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(isChannel ? 'Left channel' : 'Left group')),
+                  );
+                }
+              } catch (e) {
+                debugPrint('Exit group error: $e');
+              }
+            },
+            child: const Text('Leave', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== NEW CHAT SHEET ====================
 
   void _showNewChatOptions(BuildContext context) {
     showModalBottomSheet(
@@ -617,8 +1042,7 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-
-  // STATUS SHEET
+  // ==================== STATUS SHEET ====================
 
   void _showAddStatusOptions(BuildContext context) {
     showModalBottomSheet(
@@ -655,8 +1079,7 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-
-  // NEW CALL SHEET
+  // ==================== NEW CALL SHEET ====================
 
   void _showNewCallOptions(BuildContext context) {
     final channelName = CallService.generateChannelName();
@@ -822,8 +1245,7 @@ class _MainAppScreenState extends State<MainAppScreen>
     );
   }
 
-
-  // ⋮ MENU
+  // ==================== ⋮ MENU ====================
 
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
@@ -849,6 +1271,15 @@ class _MainAppScreenState extends State<MainAppScreen>
                 onTap: () {
                   Navigator.pop(sheetContext);
                   Navigator.pushNamed(context, '/saved_messages');
+                },
+              ),
+              _menuTile(
+                icon: Icons.archive,
+                iconColor: const Color(0xFF06B6D4),
+                label: 'Archived Chats',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openArchivedChats();
                 },
               ),
               _menuTile(
@@ -978,8 +1409,7 @@ class _MainAppScreenState extends State<MainAppScreen>
     }
   }
 
-
-  // SHARED UI
+  // ==================== SHARED UI ====================
 
   Widget _handle() {
     return Center(
@@ -1011,6 +1441,49 @@ class _MainAppScreenState extends State<MainAppScreen>
       ),
       title: Text(label, style: const TextStyle(color: Colors.white)),
       onTap: onTap,
+    );
+  }
+}
+
+/// NEW: Archived Chats screen — reuses MainAppScreen's own chat-tile
+/// builder (passed in) so the look, long-press options (including
+/// Unarchive) and navigation all stay identical to the main list.
+class _ArchivedChatsScreen extends StatelessWidget {
+  final String myUid;
+  final Widget Function(Map<String, dynamic> chat) buildChatTile;
+
+  const _ArchivedChatsScreen({required this.myUid, required this.buildChatTile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0A0F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0A0A0F),
+        elevation: 0,
+        title: const Text('Archived Chats', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white70),
+      ),
+      body: Consumer<ChatProvider>(
+        builder: (context, chatProvider, child) {
+          final archived = chatProvider.chats.where((c) {
+            final archivedFor = List<String>.from(c['archived_for'] ?? []);
+            return archivedFor.contains(myUid);
+          }).toList();
+
+          if (archived.isEmpty) {
+            return Center(
+              child: Text('No archived chats', style: TextStyle(color: Colors.white.withOpacity(0.3))),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.only(top: 8),
+            itemCount: archived.length,
+            itemBuilder: (context, index) => buildChatTile(archived[index]),
+          );
+        },
+      ),
     );
   }
 }
