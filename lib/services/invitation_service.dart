@@ -7,7 +7,6 @@ class InvitationService {
   static const String _chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   static final Random _random = Random();
 
-  // FIXED: Use Firebase Hosting URL instead of deprecated Dynamic Links
   static const String _baseUrl = 'https://aurachat-85f54.web.app';
 
   /// Generate a custom invitation link for a group or channel
@@ -37,7 +36,6 @@ class InvitationService {
     }
 
     final invitationId = _firestore.collection('invitations').doc().id;
-    // FIXED: Use Firebase Hosting URL with /join path
     final link = '$_baseUrl/join/$code';
 
     await _firestore.collection('invitations').doc(invitationId).set({
@@ -74,6 +72,59 @@ class InvitationService {
   /// Generate random code
   static String _generateRandomCode(int length) {
     return List.generate(length, (_) => _chars[_random.nextInt(_chars.length)]).join();
+  }
+
+  /// NEW: Rich preview lookup by invite code — this is what powers the
+  /// Telegram-style link card (real group/channel avatar, name, type and
+  /// live member count) in both the chat screens and the create
+  /// group/channel screens, instead of showing the raw link text.
+  ///
+  /// Returns null if the code doesn't match an active invitation or the
+  /// target chat no longer exists. Pass [userId] to also get back
+  /// `already_member` so the UI can show "Open" instead of "Join".
+  static Future<Map<String, dynamic>?> getInvitationPreviewByCode(
+    String code, {
+    String? userId,
+  }) async {
+    try {
+      final query = await _firestore
+          .collection('invitations')
+          .where('code', isEqualTo: code)
+          .where('is_active', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) return null;
+
+      final invitation = query.docs.first;
+      final invData = invitation.data();
+      final chatId = invData['chat_id'] as String?;
+      if (chatId == null) return null;
+
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
+      if (!chatDoc.exists) return null;
+
+      final chatData = chatDoc.data()!;
+      final participants = List<String>.from(chatData['participants'] ?? []);
+      final bannedUsers = List<String>.from(chatData['banned_users'] ?? []);
+      final alreadyMember = userId != null && participants.contains(userId);
+      final isBanned = userId != null && bannedUsers.contains(userId);
+
+      return {
+        'invitation_id': invitation.id,
+        'code': code,
+        'chat_id': chatId,
+        'name': chatData['name'] ?? invData['chat_name'] ?? 'Unknown',
+        'description': chatData['description'],
+        'avatar_url': chatData['avatar_url'],
+        'type': chatData['type'] ?? invData['chat_type'] ?? 'group',
+        'member_count': participants.length,
+        'already_member': alreadyMember,
+        'is_banned': isBanned,
+      };
+    } catch (e) {
+      return null;
+    }
   }
 
   /// Validate and process an invitation
@@ -240,7 +291,9 @@ class InvitationService {
     };
   }
 
-  /// Get rich preview data for a chat (NEW - for Telegram-style link preview)
+  /// Get rich preview data for a chat (used by the create group/channel
+  /// screens right after creation, and by anything that already knows the
+  /// chatId rather than the invite code).
   static Future<Map<String, dynamic>> getChatPreviewData(String chatId) async {
     final chatDoc = await _firestore.collection('chats').doc(chatId).get();
     if (!chatDoc.exists) return {};
@@ -288,7 +341,6 @@ class InvitationService {
 
     // Create new invitation
     final newCode = _generateRandomCode(8);
-    // FIXED: Use Firebase Hosting URL
     final newLink = '$_baseUrl/join/$newCode';
     final invitationId = _firestore.collection('invitations').doc().id;
 
