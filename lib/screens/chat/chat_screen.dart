@@ -26,8 +26,6 @@ import 'package:record/record.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import '../calls/call_screen.dart';
 import '../../providers/auth_provider.dart' show AuraAuthProvider;
 import '../../services/cloudinary_service.dart';
@@ -6424,8 +6422,9 @@ class _MediaEditorScreenState extends State<_MediaEditorScreen> {
       final out = File(
           '${(await getTemporaryDirectory()).path}/edit_${const Uuid().v4()}.png');
       await out.writeAsBytes(data.buffer.asUint8List());
+      // Video — return original (no trim)
       if (!mounted) return;
-      Navigator.pop(context, _EditorResult(out));
+      Navigator.pop(context, _EditorResult(widget.initialFile));
       return;
     }
 
