@@ -6413,41 +6413,25 @@ class _MediaEditorScreenState extends State<_MediaEditorScreen> {
   }
 
   Future<void> _export() async {
-    if (_mode == 'photo') {
-      final boundary = _canvasKey.currentContext!.findRenderObject()
-          as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 2.0);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (data == null) return;
-      final out = File(
-          '${(await getTemporaryDirectory()).path}/edit_${const Uuid().v4()}.png');
-      await out.writeAsBytes(data.buffer.asUint8List());
-      // Video — return original (no trim)
-      if (!mounted) return;
-      Navigator.pop(context, _EditorResult(widget.initialFile));
-      return;
-    }
-
-    final outPath =
-        '${(await getTemporaryDirectory()).path}/trim_${const Uuid().v4()}.mp4';
-    final cmd =
-        '-y -i "${widget.initialFile.path}" -ss ${_trimStart.toStringAsFixed(3)} '
-        '-to ${_trimEnd.toStringAsFixed(3)} -c copy "$outPath"';
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Trimming video...')));
-    final session = await FFmpegKit.execute(cmd);
-    final code = await session.getReturnCode();
-
+  if (_mode == 'photo') {
+    final boundary = _canvasKey.currentContext!.findRenderObject()
+        as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 2.0);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (data == null) return;
+    final out = File(
+        '${(await getTemporaryDirectory()).path}/edit_${const Uuid().v4()}.png');
+    await out.writeAsBytes(data.buffer.asUint8List());
     if (!mounted) return;
-    if (ReturnCode.isSuccess(code)) {
-      Navigator.pop(context, _EditorResult(File(outPath)));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Trim failed — sending original')));
-      Navigator.pop(context, _EditorResult(widget.initialFile));
-    }
+    Navigator.pop(context, _EditorResult(out));
+    return;
   }
+
+  // Video — return original (no trim)
+  if (!mounted) return;
+  Navigator.pop(context, _EditorResult(widget.initialFile));
+  return;
+}
 
   @override
   Widget build(BuildContext context) {
