@@ -47,7 +47,8 @@ dependencies:
 
   # http request
   http: ^1.2.0
- 
+
+ ffmpeg_kit_flutter_new: ^1.0.5
   # Chat & Media
   uuid: ^4.5.0
   emoji_picker_flutter: ^3.1.0
