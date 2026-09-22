@@ -26,12 +26,17 @@ import 'package:record/record.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../calls/call_screen.dart';
 import '../../providers/auth_provider.dart' show AuraAuthProvider;
 import '../../services/cloudinary_service.dart';
 import '../../services/call_service.dart';
 import '../../services/invitation_service.dart';
 import '../../utils/verified_badge.dart';
+import '../calls/call_screen.dart';
+
+// NOTE: if any of the imports above don't exist in your project,
+// comment that import line AND remove the corresponding usage.
+// The file references: AuraAuthProvider, CloudinaryService,
+// CallService, InvitationService, VerifiedUsername, CallScreen.
 
 class ChatScreen extends StatefulWidget {
   final String? chatId;
@@ -261,105 +266,130 @@ class _ChatScreenState extends State<ChatScreen>
     _loadStickers();
     _setOnlineStatus();
   }
-
   Future<void> _loadChatInfoAndStart() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .get();
-      if (doc.exists) {
-        _applyChatInfo(doc.data() as Map<String, dynamic>);
-      }
-    } catch (_) {}
-
-    _subscribeToChat();
-    _loadMessages();
-    _subscribeToMessages();
-    _loadPinnedMessages();
-
-    if (!_isGroup && !_isChannel) {
-      _initDirectFeatures();
-    }
-  }
-
-  void _applyChatInfo(Map<String, dynamic> data) {
-    final clearedMap = data['cleared_at'] as Map<String, dynamic>?;
-    final clearedTs = _currentUserId != null
-        ? (clearedMap?[_currentUserId] as Timestamp?)
-        : null;
-    _clearedAt = clearedTs?.toDate();
-
-    _creatorEmail = data['created_by_email'] as String?;
-    _chatSettings = data['settings'] as Map<String, dynamic>?;
-    _myRole =
-        (data['participants_data']?[_currentUserId]?['role'] ?? 'member')
-            as String;
-
-    final isAdmin = _myRole == 'owner' || _myRole == 'admin';
-    _canSend = !(_chatSettings?['chat_disabled'] == true && !isAdmin);
-    _canSendFiles =
-        !(_chatSettings?['file_sharing_disabled'] == true && !isAdmin);
-    _isAnnouncementsOnly =
-        _chatSettings?['announcements_only'] == true && !isAdmin;
-    _selfDestructSeconds = (data['self_destruct_seconds'] ?? 0) as int;
-    _pinnedMessageId = data['pinned_message_id'] as String?;
-
-    if (!_isGroup && !_isChannel) {
-      final parts = List<String>.from(data['participants'] ?? []);
-      _otherUserId = parts.firstWhere(
-        (id) => id != _currentUserId,
-        orElse: () => '',
-      );
-      if (_otherUserId!.isEmpty) _otherUserId = null;
-    }
-  }
-
-  void _subscribeToChat() {
-    _chatSubscription = FirebaseFirestore.instance
+  try {
+    final doc = await FirebaseFirestore.instance
         .collection('chats')
         .doc(_chatId)
-        .snapshots()
-        .listen((doc) {
-      if (!doc.exists || !mounted) return;
-      final data = doc.data() as Map<String, dynamic>;
-      setState(() => _applyChatInfo(data));
-      _loadPinnedMessages();
+        .get();
+    if (doc.exists) {
+      _applyChatInfo(doc.data() as Map<String, dynamic>);
+    }
+  } catch (_) {}
+
+  _subscribeToChat();
+  _loadMessages();
+  _subscribeToMessages();
+  _loadPinnedMessages();
+
+  if (!_isGroup && !_isChannel) {
+    _initDirectFeatures();
+  }
+}
+
+void _applyChatInfo(Map<String, dynamic> data) {
+  final clearedMap = data['cleared_at'] as Map<String, dynamic>?;
+  final clearedTs = _currentUserId != null
+      ? (clearedMap?[_currentUserId] as Timestamp?)
+      : null;
+  _clearedAt = clearedTs?.toDate();
+
+  _creatorEmail = data['created_by_email'] as String?;
+  _chatSettings = data['settings'] as Map<String, dynamic>?;
+  _myRole =
+      (data['participants_data']?[_currentUserId]?['role'] ?? 'member')
+          as String;
+
+  final isAdmin = _myRole == 'owner' || _myRole == 'admin';
+  _canSend = !(_chatSettings?['chat_disabled'] == true && !isAdmin);
+  _canSendFiles =
+      !(_chatSettings?['file_sharing_disabled'] == true && !isAdmin);
+  _isAnnouncementsOnly =
+      _chatSettings?['announcements_only'] == true && !isAdmin;
+  _selfDestructSeconds = (data['self_destruct_seconds'] ?? 0) as int;
+  _pinnedMessageId = data['pinned_message_id'] as String?;
+
+  if (!_isGroup && !_isChannel) {
+    final parts = List<String>.from(data['participants'] ?? []);
+    _otherUserId = parts.firstWhere(
+      (id) => id != _currentUserId,
+      orElse: () => '',
+    );
+    if (_otherUserId!.isEmpty) _otherUserId = null;
+  }
+}
+
+void _subscribeToChat() {
+  _chatSubscription = FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .snapshots()
+      .listen((doc) {
+    if (!doc.exists || !mounted) return;
+    final data = doc.data() as Map<String, dynamic>;
+    setState(() => _applyChatInfo(data));
+    _loadPinnedMessages();
+  });
+}
+
+Future<void> _initDirectFeatures() async {
+  if (_otherUserId == null) return;
+  await _checkBlockStatus();
+  _subscribeBlockStatus();
+  _subscribeOtherUserStatus();
+  _subscribeTyping();
+  _loadNickname();
+}
+
+Future<void> _loadNickname() async {
+  if (_otherUserId == null || _currentUserId == null) return;
+  try {
+    final d = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('nicknames')
+        .doc(_otherUserId)
+        .get();
+    if (d.exists && mounted) {
+      setState(() => _otherUserNickname = d.data()?['nickname']);
+    }
+  } catch (_) {}
+}
+
+Future<void> _checkBlockStatus() async {
+  if (_otherUserId == null) return;
+  try {
+    final myDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .get();
+    final myBlocked = List<String>.from(myDoc.data()?['blocked_users'] ?? []);
+    final theirDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_otherUserId)
+        .get();
+    final theirBlocked =
+        List<String>.from(theirDoc.data()?['blocked_users'] ?? []);
+    if (!mounted) return;
+    setState(() {
+      _iBlockedThem = myBlocked.contains(_otherUserId);
+      _theyBlockedMe = theirBlocked.contains(_currentUserId);
+      _isBlocked = _iBlockedThem || _theyBlockedMe;
     });
-  }
+  } catch (_) {}
+}
 
-  Future<void> _initDirectFeatures() async {
-    if (_otherUserId == null) return;
-    await _checkBlockStatus();
-    _subscribeBlockStatus();
-    _subscribeOtherUserStatus();
-    _subscribeTyping();
-    _loadNickname();
-  }
-
-  Future<void> _loadNickname() async {
-    if (_otherUserId == null || _currentUserId == null) return;
-    try {
-      final d = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUserId)
-          .collection('nicknames')
-          .doc(_otherUserId)
-          .get();
-      if (d.exists && mounted) {
-        setState(() => _otherUserNickname = d.data()?['nickname']);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _checkBlockStatus() async {
-    if (_otherUserId == null) return;
-    try {
-      final myDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUserId)
-          .get();
-      final myBlocked = List<String>.from(myDoc.data()?['blocked_users'] ?? []);
+void _subscribeBlockStatus() {
+  if (_otherUserId == null) return;
+  _blockUnsub.add(
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .snapshots()
+        .listen((snap) async {
+      if (!mounted) return;
+      final blocked =
+          List<String>.from(snap.data()?['blocked_users'] ?? []);
       final theirDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(_otherUserId)
@@ -368,557 +398,762 @@ class _ChatScreenState extends State<ChatScreen>
           List<String>.from(theirDoc.data()?['blocked_users'] ?? []);
       if (!mounted) return;
       setState(() {
-        _iBlockedThem = myBlocked.contains(_otherUserId);
+        _iBlockedThem = blocked.contains(_otherUserId);
         _theyBlockedMe = theirBlocked.contains(_currentUserId);
         _isBlocked = _iBlockedThem || _theyBlockedMe;
       });
-    } catch (_) {}
-  }
+    }),
+  );
+}
 
-  void _subscribeBlockStatus() {
-    if (_otherUserId == null) return;
-    _blockUnsub.add(
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUserId)
-          .snapshots()
-          .listen((snap) async {
-        if (!mounted) return;
-        final blocked =
-            List<String>.from(snap.data()?['blocked_users'] ?? []);
-        final theirDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(_otherUserId)
-            .get();
-        final theirBlocked =
-            List<String>.from(theirDoc.data()?['blocked_users'] ?? []);
-        if (!mounted) return;
-        setState(() {
-          _iBlockedThem = blocked.contains(_otherUserId);
-          _theyBlockedMe = theirBlocked.contains(_currentUserId);
-          _isBlocked = _iBlockedThem || _theyBlockedMe;
-        });
-      }),
-    );
-  }
+void _subscribeOtherUserStatus() {
+  if (_otherUserId == null) return;
+  _statusSubscription?.cancel();
+  _statusSubscription = FirebaseFirestore.instance
+      .collection('users')
+      .doc(_otherUserId)
+      .snapshots()
+      .listen((doc) {
+    if (!mounted || !doc.exists) return;
+    final d = doc.data() as Map<String, dynamic>;
+    final online = d['is_online'] == true;
+    final lastSeen = d['last_seen'] as Timestamp?;
+    if (!mounted) return;
+    setState(() {
+      _otherUserOnline = online;
+      _otherUserLastSeen = lastSeen?.toDate();
+    });
+  });
+}
 
-  void _subscribeOtherUserStatus() {
-    if (_otherUserId == null) return;
-    _statusSubscription?.cancel();
-    _statusSubscription = FirebaseFirestore.instance
+void _subscribeTyping() {
+  if (_otherUserId == null) return;
+  _typingSubscription?.cancel();
+  _typingSubscription = FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('typing')
+      .doc(_otherUserId)
+      .snapshots()
+      .listen((doc) {
+    if (!mounted) return;
+    final isTyping =
+        doc.exists && (doc.data()?['is_typing'] as bool? ?? false);
+    setState(() => _otherUserTyping = isTyping);
+    _otherTypingHideTimer?.cancel();
+    if (isTyping) {
+      _otherTypingHideTimer = Timer(const Duration(seconds: 13), () {
+        if (mounted) setState(() => _otherUserTyping = false);
+      });
+    }
+  });
+}
+
+void _startTyping() {
+  if (_chatId == null || _currentUserId == null || _isBlocked) return;
+  if (_messageController.text.trim().isEmpty) return;
+  FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('typing')
+      .doc(_currentUserId)
+      .set({
+    'timestamp': FieldValue.serverTimestamp(),
+    'is_typing': true,
+  }, SetOptions(merge: true));
+  _typingTimer?.cancel();
+  _typingTimer = Timer(const Duration(seconds: 3), _stopTyping);
+}
+
+void _stopTyping() {
+  if (_chatId == null || _currentUserId == null) return;
+  _typingTimer?.cancel();
+  FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('typing')
+      .doc(_currentUserId)
+      .delete()
+      .catchError((_) {});
+}
+
+Future<void> _setOnlineStatus() async {
+  if (_currentUserId == null) return;
+  try {
+    await FirebaseFirestore.instance
         .collection('users')
-        .doc(_otherUserId)
-        .snapshots()
-        .listen((doc) {
-      if (!mounted || !doc.exists) return;
-      final d = doc.data() as Map<String, dynamic>;
-      final online = d['is_online'] == true;
-      final lastSeen = d['last_seen'] as Timestamp?;
-      if (!mounted) return;
-      setState(() {
-        _otherUserOnline = online;
-        _otherUserLastSeen = lastSeen?.toDate();
-      });
-    });
-  }
-
-  void _subscribeTyping() {
-    if (_otherUserId == null) return;
-    _typingSubscription?.cancel();
-    _typingSubscription = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('typing')
-        .doc(_otherUserId)
-        .snapshots()
-        .listen((doc) {
-      if (!mounted) return;
-      final isTyping =
-          doc.exists && (doc.data()?['is_typing'] as bool? ?? false);
-      setState(() => _otherUserTyping = isTyping);
-      _otherTypingHideTimer?.cancel();
-      if (isTyping) {
-        _otherTypingHideTimer = Timer(const Duration(seconds: 13), () {
-          if (mounted) setState(() => _otherUserTyping = false);
-        });
-      }
-    });
-  }
-
-  void _startTyping() {
-    if (_chatId == null || _currentUserId == null || _isBlocked) return;
-    if (_messageController.text.trim().isEmpty) return;
-    FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('typing')
         .doc(_currentUserId)
-        .set({
-      'timestamp': FieldValue.serverTimestamp(),
-      'is_typing': true,
-    }, SetOptions(merge: true));
-    _typingTimer?.cancel();
-    _typingTimer = Timer(const Duration(seconds: 3), _stopTyping);
-  }
-
-  void _stopTyping() {
-    if (_chatId == null || _currentUserId == null) return;
-    _typingTimer?.cancel();
-    FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('typing')
-        .doc(_currentUserId)
-        .delete()
-        .catchError((_) {});
-  }
-
-  Future<void> _setOnlineStatus() async {
-    if (_currentUserId == null) return;
+        .update({
+      'is_online': true,
+      'last_seen': FieldValue.serverTimestamp(),
+    });
+  } catch (_) {}
+  _onlineHeartbeat?.cancel();
+  _onlineHeartbeat = Timer.periodic(const Duration(seconds: 30), (_) async {
     try {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(_currentUserId)
-          .update({
-        'is_online': true,
-        'last_seen': FieldValue.serverTimestamp(),
-      });
+          .update({'last_seen': FieldValue.serverTimestamp()});
     } catch (_) {}
-    _onlineHeartbeat?.cancel();
-    _onlineHeartbeat = Timer.periodic(const Duration(seconds: 30), (_) async {
-      try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUserId)
-            .update({'last_seen': FieldValue.serverTimestamp()});
-      } catch (_) {}
+  });
+}
+
+Future<void> _setOfflineStatus() async {
+  _onlineHeartbeat?.cancel();
+  if (_currentUserId == null) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .update({
+      'is_online': false,
+      'last_seen': FieldValue.serverTimestamp(),
     });
+  } catch (_) {}
+}
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  if (state == AppLifecycleState.resumed) {
+    _setOnlineStatus();
+  } else if (state == AppLifecycleState.paused ||
+      state == AppLifecycleState.detached) {
+    _setOfflineStatus();
   }
+}
 
-  Future<void> _setOfflineStatus() async {
-    _onlineHeartbeat?.cancel();
-    if (_currentUserId == null) return;
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUserId)
-          .update({
-        'is_online': false,
-        'last_seen': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {}
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _setOnlineStatus();
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      _setOfflineStatus();
-    }
-  }
-
-  Future<void> _loadMessages() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .collection('messages')
-          .orderBy('created_at', descending: true)
-          .limit(100)
-          .get();
-
-      final loaded = <Map<String, dynamic>>[];
-      final ids = <String>{};
-      for (final doc in snap.docs) {
-        final d = doc.data();
-        if (d['deleted_for_everyone'] == true) continue;
-        final df = List<String>.from(d['deleted_for'] ?? []);
-        if (_currentUserId != null && df.contains(_currentUserId)) continue;
-        final destruct = d['self_destruct_seconds'] as int?;
-        if (destruct != null && destruct > 0 && d['created_at'] != null) {
-          final ct = (d['created_at'] as Timestamp).toDate();
-          if (DateTime.now().difference(ct).inSeconds > destruct) continue;
-        }
-        if (_clearedAt != null && d['created_at'] != null) {
-          final ct = (d['created_at'] as Timestamp).toDate();
-          if (!ct.isAfter(_clearedAt!)) continue;
-        }
-        if (d['sender_id'] != null) ids.add(d['sender_id'] as String);
-        loaded.add({'id': doc.id, ...d});
-      }
-      await _fetchMissingUsers(ids);
-      if (!mounted) return;
-      setState(() {
-        _messages = loaded;
-        _isLoading = false;
-      });
-      _scrollToBottom(force: true);
-      _markAsRead();
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _subscribeToMessages() {
-    _messageSubscription?.cancel();
-    _messageSubscription = FirebaseFirestore.instance
+Future<void> _loadMessages() async {
+  try {
+    final snap = await FirebaseFirestore.instance
         .collection('chats')
         .doc(_chatId)
         .collection('messages')
         .orderBy('created_at', descending: true)
         .limit(100)
-        .snapshots()
-        .listen((snap) async {
-      final loaded = <Map<String, dynamic>>[];
-      final ids = <String>{};
-      for (final doc in snap.docs) {
-        final d = doc.data();
-        if (d['deleted_for_everyone'] == true) continue;
-        final df = List<String>.from(d['deleted_for'] ?? []);
-        if (_currentUserId != null && df.contains(_currentUserId)) continue;
-        final destruct = d['self_destruct_seconds'] as int?;
-        if (destruct != null && destruct > 0 && d['created_at'] != null) {
-          final ct = (d['created_at'] as Timestamp).toDate();
-          if (DateTime.now().difference(ct).inSeconds > destruct) continue;
-        }
-        if (_clearedAt != null && d['created_at'] != null) {
-          final ct = (d['created_at'] as Timestamp).toDate();
-          if (!ct.isAfter(_clearedAt!)) continue;
-        }
-        if (d['sender_id'] != null) ids.add(d['sender_id'] as String);
-        loaded.add({'id': doc.id, ...d});
-      }
-      await _fetchMissingUsers(ids);
-      if (!mounted) return;
-      setState(() {
-        _messages = loaded;
-        _isLoading = false;
-      });
-      _scrollToBottom();
-      _markAsRead();
-    });
-  }
+        .get();
 
-  Future<void> _fetchMissingUsers(Set<String> ids) async {
-    final missing = ids
-        .where((id) =>
-            !_userCache.containsKey(id) && !_pendingUserFetches.contains(id))
-        .toList();
-    if (missing.isEmpty) return;
-    _pendingUserFetches.addAll(missing);
-    final docs = await Future.wait(missing
-        .map((id) =>
-            FirebaseFirestore.instance.collection('users').doc(id).get()));
-    _pendingUserFetches.removeAll(missing);
-    for (final d in docs) {
-      if (d.exists) {
-        final u = d.data()!;
-        _userCache[d.id] = {
-          'username': u['username'] ?? u['display_name'] ?? 'Unknown',
-          'display_name': u['display_name'] ?? u['username'] ?? 'Unknown',
-          'avatar_url': u['avatar_url'],
-          'email': u['email'],
-          'is_verified': _isVerifiedEmail(u['email']),
-        };
+    final loaded = <Map<String, dynamic>>[];
+    final ids = <String>{};
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      if (d['deleted_for_everyone'] == true) continue;
+      final df = List<String>.from(d['deleted_for'] ?? []);
+      if (_currentUserId != null && df.contains(_currentUserId)) continue;
+      final destruct = d['self_destruct_seconds'] as int?;
+      if (destruct != null && destruct > 0 && d['created_at'] != null) {
+        final ct = (d['created_at'] as Timestamp).toDate();
+        if (DateTime.now().difference(ct).inSeconds > destruct) continue;
       }
+      if (_clearedAt != null && d['created_at'] != null) {
+        final ct = (d['created_at'] as Timestamp).toDate();
+        if (!ct.isAfter(_clearedAt!)) continue;
+      }
+      if (d['sender_id'] != null) ids.add(d['sender_id'] as String);
+      loaded.add({'id': doc.id, ...d});
     }
-  }
-
-  bool _isVerifiedEmail(dynamic email) {
-    if (email == null) return false;
-    final e = email.toString().toLowerCase().trim();
-    if (e.endsWith('@bot.aurachat.app')) return false;
-    return e.endsWith('@gmail.com') || e.endsWith('@aurachat.app');
-  }
-
-  Future<void> _markAsRead() async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .update({
-        'unread_counts.$_currentUserId': 0,
-        'last_read_at.$_currentUserId': FieldValue.serverTimestamp(),
-      });
-      final unread = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .collection('messages')
-          .where('is_read', isEqualTo: false)
-          .limit(500)
-          .get();
-      if (unread.docs.isEmpty) return;
-      final batch = FirebaseFirestore.instance.batch();
-      var n = 0;
-      for (final doc in unread.docs) {
-        if (doc.data()['sender_id'] != _currentUserId) {
-          batch.update(doc.reference, {'is_read': true});
-          n++;
-        }
-      }
-      if (n > 0) await batch.commit();
-    } catch (_) {}
-  }
-
-  void _scrollToBottom({bool force = false}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final max = _scrollController.position.maxScrollExtent;
-      final cur = _scrollController.position.pixels;
-      if (force || (max - cur) < 300) {
-        _scrollController.jumpTo(max);
-      }
-    });
-  }
-
-  Future<void> _loadPinnedMessages() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .collection('pinned_messages')
-          .orderBy('pinned_at', descending: true)
-          .limit(3)
-          .get();
-      final pinned = snap.docs
-          .map((d) => {'id': d.id, ...d.data()})
-          .where((p) {
-        final hidden = List<String>.from(p['hidden_for'] ?? []);
-        return !hidden.contains(_currentUserId);
-      }).toList();
-      if (!mounted) return;
-      setState(() => _pinnedMessages = pinned);
-    } catch (_) {}
-  }
-
-  Future<void> _sendTextMessage() async {
-    if (_isBlocked || !_canSend || _isAnnouncementsOnly) return;
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-    _messageController.clear();
-    setState(() {});
-    _stopTyping();
-    await _sendMessage(type: 'text', content: text);
-    if (_EffectBurst.isTrigger(text)) {
-      if (mounted) _EffectBurst.fire(context, text);
-    }
-  }
-
-  Future<void> _sendMessage({
-    required String type,
-    required String content,
-    String? mediaUrl,
-    String? fileName,
-    String? fileSize,
-    int? duration,
-    Map<String, dynamic>? sticker,
-    Map<String, dynamic>? location,
-    Map<String, dynamic>? contact,
-    Map<String, dynamic>? linkPreview,
-    List<Map<String, dynamic>>? images,
-    String? gifUrl,
-    bool viewOnce = false,
-  }) async {
-    if (_currentUserId == null || _chatId == null) return;
-
-    final messageId = const Uuid().v4();
-    final now = DateTime.now().toIso8601String();
-
-    if (type == 'text' && linkPreview == null) {
-      final url = _detectFirstUrl(content);
-      if (url != null &&
-          !_InviteLinkDetector.isInvite(url) &&
-          !_AuraShortLink.isShortLink(url)) {
-        linkPreview = await _fetchLinkPreview(url);
-      }
-    }
-
-    final serverMessage = <String, dynamic>{
-      'id': messageId,
-      'chat_id': _chatId,
-      'sender_id': _currentUserId,
-      'text': content,
-      'content': content,
-      'type': type,
-      'media_type': type,
-      'media_url': mediaUrl,
-      'file_name': fileName,
-      'file_size': fileSize,
-      'duration': duration,
-      'sticker': sticker,
-      'images': images,
-      'gif_url': gifUrl,
-      'location_lat': location?['lat'],
-      'location_lng': location?['lng'],
-      'location_label': location?['label'],
-      'location_live': location?['live'] ?? false,
-      'contact': contact,
-      'link_preview': linkPreview,
-      'view_once': viewOnce,
-      'reply_to': _replyingTo,
-      'reply_to_content': _replyingToContent,
-      'reply_to_sender': _replyingToSender,
-      'self_destruct_seconds':
-          _selfDestructSeconds > 0 ? _selfDestructSeconds : null,
-      'created_at': FieldValue.serverTimestamp(),
-      'is_read': false,
-      'is_edited': false,
-      'deleted_for_everyone': false,
-      'deleted_for': [],
-      'reactions': {},
-    };
-
+    await _fetchMissingUsers(ids);
+    if (!mounted) return;
     setState(() {
-      _messages.insert(
-        0,
-        {...serverMessage, 'created_at': now, 'created_at_local': now},
-      );
-      _replyingTo = null;
-      _replyingToContent = null;
-      _replyingToSender = null;
+      _messages = loaded;
+      _isLoading = false;
     });
     _scrollToBottom(force: true);
+    _markAsRead();
+  } catch (_) {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
 
-    try {
-      final ref = FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .collection('messages')
-          .doc(messageId);
-      await ref.set(serverMessage);
+void _subscribeToMessages() {
+  _messageSubscription?.cancel();
+  _messageSubscription = FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('messages')
+      .orderBy('created_at', descending: true)
+      .limit(100)
+      .snapshots()
+      .listen((snap) async {
+    final loaded = <Map<String, dynamic>>[];
+    final ids = <String>{};
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      if (d['deleted_for_everyone'] == true) continue;
+      final df = List<String>.from(d['deleted_for'] ?? []);
+      if (_currentUserId != null && df.contains(_currentUserId)) continue;
+      final destruct = d['self_destruct_seconds'] as int?;
+      if (destruct != null && destruct > 0 && d['created_at'] != null) {
+        final ct = (d['created_at'] as Timestamp).toDate();
+        if (DateTime.now().difference(ct).inSeconds > destruct) continue;
+      }
+      if (_clearedAt != null && d['created_at'] != null) {
+        final ct = (d['created_at'] as Timestamp).toDate();
+        if (!ct.isAfter(_clearedAt!)) continue;
+      }
+      if (d['sender_id'] != null) ids.add(d['sender_id'] as String);
+      loaded.add({'id': doc.id, ...d});
+    }
+    await _fetchMissingUsers(ids);
+    if (!mounted) return;
+    setState(() {
+      _messages = loaded;
+      _isLoading = false;
+    });
+    _scrollToBottom();
+    _markAsRead();
+  });
+}
 
-      final upd = <String, dynamic>{
-        'last_message': _lastMessageLabel(type, content),
-        'last_message_at': FieldValue.serverTimestamp(),
+Future<void> _fetchMissingUsers(Set<String> ids) async {
+  final missing = ids
+      .where((id) =>
+          !_userCache.containsKey(id) && !_pendingUserFetches.contains(id))
+      .toList();
+  if (missing.isEmpty) return;
+  _pendingUserFetches.addAll(missing);
+  final docs = await Future.wait(missing
+      .map((id) =>
+          FirebaseFirestore.instance.collection('users').doc(id).get()));
+  _pendingUserFetches.removeAll(missing);
+  for (final d in docs) {
+    if (d.exists) {
+      final u = d.data()!;
+      _userCache[d.id] = {
+        'username': u['username'] ?? u['display_name'] ?? 'Unknown',
+        'display_name': u['display_name'] ?? u['username'] ?? 'Unknown',
+        'avatar_url': u['avatar_url'],
+        'email': u['email'],
+        'is_verified': _isVerifiedEmail(u['email']),
       };
-      if (_otherUserId != null) {
-        upd['unread_counts.$_otherUserId'] = FieldValue.increment(1);
-      }
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(_chatId)
-          .update(upd);
+    }
+  }
+}
 
-      if (_selfDestructSeconds > 0) {
-        Timer(Duration(seconds: _selfDestructSeconds), () {
-          FirebaseFirestore.instance
-              .collection('chats')
-              .doc(_chatId)
-              .collection('messages')
-              .doc(messageId)
-              .update({
-            'deleted_for_everyone': true,
-            'text': 'This message was deleted',
-            'content': 'This message was deleted',
-            'media_url': null,
-          }).catchError((_) {});
-        });
+bool _isVerifiedEmail(dynamic email) {
+  if (email == null) return false;
+  final e = email.toString().toLowerCase().trim();
+  if (e.endsWith('@bot.aurachat.app')) return false;
+  return e.endsWith('@gmail.com') || e.endsWith('@aurachat.app');
+}
+
+Future<void> _markAsRead() async {
+  try {
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(_chatId)
+        .update({
+      'unread_counts.$_currentUserId': 0,
+      'last_read_at.$_currentUserId': FieldValue.serverTimestamp(),
+    });
+    final unread = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(_chatId)
+        .collection('messages')
+        .where('is_read', isEqualTo: false)
+        .limit(500)
+        .get();
+    if (unread.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    var n = 0;
+    for (final doc in unread.docs) {
+      if (doc.data()['sender_id'] != _currentUserId) {
+        batch.update(doc.reference, {'is_read': true});
+        n++;
       }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _messages.removeWhere((m) => m['id'] == messageId));
+    }
+    if (n > 0) await batch.commit();
+  } catch (_) {}
+}
+
+void _scrollToBottom({bool force = false}) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!_scrollController.hasClients) return;
+    final max = _scrollController.position.maxScrollExtent;
+    final cur = _scrollController.position.pixels;
+    if (force || (max - cur) < 300) {
+      _scrollController.jumpTo(max);
+    }
+  });
+}
+
+Future<void> _loadPinnedMessages() async {
+  try {
+    final snap = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(_chatId)
+        .collection('pinned_messages')
+        .orderBy('pinned_at', descending: true)
+        .limit(3)
+        .get();
+    final pinned = snap.docs
+        .map((d) => {'id': d.id, ...d.data()})
+        .where((p) {
+      final hidden = List<String>.from(p['hidden_for'] ?? []);
+      return !hidden.contains(_currentUserId);
+    }).toList();
+    if (!mounted) return;
+    setState(() => _pinnedMessages = pinned);
+  } catch (_) {}
+}
+  Future<void> _sendTextMessage() async {
+  if (_isBlocked || !_canSend || _isAnnouncementsOnly) return;
+  final text = _messageController.text.trim();
+  if (text.isEmpty) return;
+  _messageController.clear();
+  setState(() {});
+  _stopTyping();
+  await _sendMessage(type: 'text', content: text);
+  if (_EffectBurst.isTrigger(text)) {
+    if (mounted) _EffectBurst.fire(context, text);
+  }
+}
+
+Future<void> _sendMessage({
+  required String type,
+  required String content,
+  String? mediaUrl,
+  String? fileName,
+  String? fileSize,
+  int? duration,
+  Map<String, dynamic>? sticker,
+  Map<String, dynamic>? location,
+  Map<String, dynamic>? contact,
+  Map<String, dynamic>? linkPreview,
+  List<Map<String, dynamic>>? images,
+  String? gifUrl,
+  bool viewOnce = false,
+}) async {
+  if (_currentUserId == null || _chatId == null) return;
+
+  final messageId = const Uuid().v4();
+  final now = DateTime.now().toIso8601String();
+
+  if (type == 'text' && linkPreview == null) {
+    final url = _detectFirstUrl(content);
+    if (url != null &&
+        !_InviteLinkDetector.isInvite(url) &&
+        !_AuraShortLink.isShortLink(url)) {
+      linkPreview = await _fetchLinkPreview(url);
+    }
+  }
+
+  final serverMessage = <String, dynamic>{
+    'id': messageId,
+    'chat_id': _chatId,
+    'sender_id': _currentUserId,
+    'text': content,
+    'content': content,
+    'type': type,
+    'media_type': type,
+    'media_url': mediaUrl,
+    'file_name': fileName,
+    'file_size': fileSize,
+    'duration': duration,
+    'sticker': sticker,
+    'images': images,
+    'gif_url': gifUrl,
+    'location_lat': location?['lat'],
+    'location_lng': location?['lng'],
+    'location_label': location?['label'],
+    'location_live': location?['live'] ?? false,
+    'contact': contact,
+    'link_preview': linkPreview,
+    'view_once': viewOnce,
+    'reply_to': _replyingTo,
+    'reply_to_content': _replyingToContent,
+    'reply_to_sender': _replyingToSender,
+    'self_destruct_seconds':
+        _selfDestructSeconds > 0 ? _selfDestructSeconds : null,
+    'created_at': FieldValue.serverTimestamp(),
+    'is_read': false,
+    'is_edited': false,
+    'deleted_for_everyone': false,
+    'deleted_for': [],
+    'reactions': {},
+  };
+
+  setState(() {
+    _messages.insert(
+      0,
+      {...serverMessage, 'created_at': now, 'created_at_local': now},
+    );
+    _replyingTo = null;
+    _replyingToContent = null;
+    _replyingToSender = null;
+  });
+  _scrollToBottom(force: true);
+
+  try {
+    final ref = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(_chatId)
+        .collection('messages')
+        .doc(messageId);
+    await ref.set(serverMessage);
+
+    final upd = <String, dynamic>{
+      'last_message': _lastMessageLabel(type, content),
+      'last_message_at': FieldValue.serverTimestamp(),
+    };
+    if (_otherUserId != null) {
+      upd['unread_counts.$_otherUserId'] = FieldValue.increment(1);
+    }
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(_chatId)
+        .update(upd);
+
+    if (_selfDestructSeconds > 0) {
+      Timer(Duration(seconds: _selfDestructSeconds), () {
+        FirebaseFirestore.instance
+            .collection('chats')
+            .doc(_chatId)
+            .collection('messages')
+            .doc(messageId)
+            .update({
+          'deleted_for_everyone': true,
+          'text': 'This message was deleted',
+          'content': 'This message was deleted',
+          'media_url': null,
+        }).catchError((_) {});
+      });
+    }
+  } catch (e) {
+    if (!mounted) return;
+    setState(() => _messages.removeWhere((m) => m['id'] == messageId));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Failed: $e')));
+  }
+}
+
+String _lastMessageLabel(String type, String content) {
+  switch (type) {
+    case 'image':
+      return '📷 Photo';
+    case 'video':
+      return '🎥 Video';
+    case 'audio':
+      return '🎤 Voice message';
+    case 'file':
+      return '📎 File';
+    case 'sticker':
+      return '🎨 Sticker';
+    case 'gif':
+      return '🎞️ GIF';
+    case 'location':
+      return '📍 Location';
+    case 'contact':
+      return '👤 Contact';
+    default:
+      return content;
+  }
+}
+
+String? _detectFirstUrl(String text) {
+  final m = RegExp(r'(https?://[^\s]+)').firstMatch(text);
+  return m?.group(1);
+}
+
+Future<Map<String, dynamic>?> _fetchLinkPreview(String url) async {
+  try {
+    final r = await http.get(Uri.parse(
+        'https://api.microlink.io/?url=${Uri.encodeComponent(url)}'));
+    if (r.statusCode != 200) return null;
+    final body = jsonDecode(r.body) as Map<String, dynamic>;
+    if (body['status'] != 'success') return null;
+    final d = body['data'] as Map<String, dynamic>;
+    return {
+      'title': d['title'] ?? '',
+      'description': d['description'] ?? '',
+      'image': (d['image']?['url']) ?? '',
+      'domain': d['publisher'] ??
+          (d['url'] != null ? Uri.parse(d['url'] as String).host : ''),
+      'url': d['url'] ?? url,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _loadStickers() async {
+  if (_currentUserId == null || _loadingStickers) return;
+  setState(() => _loadingStickers = true);
+  try {
+    final f = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('stickers')
+        .orderBy('created_at', descending: true)
+        .limit(200)
+        .get();
+    final packs = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('sticker_packs')
+        .orderBy('created_at', descending: true)
+        .get();
+    if (!mounted) return;
+    setState(() {
+      _myStickers = f.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      _stickerPacks =
+          packs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      _favoriteStickers =
+          _myStickers.where((s) => s['favorite'] == true).toList();
+      _loadingStickers = false;
+    });
+  } catch (_) {
+    if (mounted) setState(() => _loadingStickers = false);
+  }
+}
+
+Future<void> _createStickerFromGallery({bool video = false}) async {
+  final XFile? picked = video
+      ? await _picker.pickVideo(source: ImageSource.gallery)
+      : await _picker.pickImage(
+          source: ImageSource.gallery, imageQuality: 85);
+  if (picked == null) return;
+  ScaffoldMessenger.of(context)
+      .showSnackBar(const SnackBar(content: Text('Creating sticker...')));
+  try {
+    final file = File(picked.path);
+    final url = video
+        ? await CloudinaryService.uploadVideo(
+            file, 'aurachat/stickers/$_currentUserId')
+        : await CloudinaryService.uploadImage(
+            file, 'aurachat/stickers/$_currentUserId');
+    if (url == null) throw Exception('Upload failed');
+    final ref = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('stickers')
+        .doc();
+    await ref.set({
+      'id': ref.id,
+      'url': url,
+      'sticker_type': video ? 'video' : 'static',
+      'favorite': false,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+    await _loadStickers();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sticker created')));
+    }
+  } catch (e) {
+    if (mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
   }
+}
 
-  String _lastMessageLabel(String type, String content) {
-    switch (type) {
-      case 'image':
-        return '📷 Photo';
-      case 'video':
-        return '🎥 Video';
-      case 'audio':
-        return '🎤 Voice message';
-      case 'file':
-        return '📎 File';
-      case 'sticker':
-        return '🎨 Sticker';
-      case 'gif':
-        return '🎞️ GIF';
-      case 'location':
-        return '📍 Location';
-      case 'contact':
-        return '👤 Contact';
-      default:
-        return content;
+Future<void> _deleteSticker(String id) async {
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(_currentUserId)
+      .collection('stickers')
+      .doc(id)
+      .delete();
+  await _loadStickers();
+}
+
+Future<void> _toggleFavoriteSticker(Map<String, dynamic> s) async {
+  final ref = FirebaseFirestore.instance
+      .collection('users')
+      .doc(_currentUserId)
+      .collection('stickers')
+      .doc(s['id']);
+  await ref.update({'favorite': !(s['favorite'] == true)});
+  await _loadStickers();
+}
+
+Future<void> _sendSticker(Map<String, dynamic> s) async {
+  if (_isBlocked || !_canSend || _isAnnouncementsOnly) return;
+  setState(() => _showEmojiPicker = false);
+  await _sendMessage(
+    type: 'sticker',
+    content: '🎨 Sticker',
+    sticker: {
+      'url': s['url'],
+      'sticker_type': s['sticker_type'] ?? 'static',
+    },
+    mediaUrl: s['url'],
+  );
+}
+
+Future<void> _sendGif(String url) async {
+  setState(() => _showEmojiPicker = false);
+  await _sendMessage(
+      type: 'gif', content: '🎞️ GIF', gifUrl: url, mediaUrl: url);
+}
+
+Future<void> _loadGifs({String? q}) async {
+  if (_loadingGifs) return;
+  setState(() => _loadingGifs = true);
+  try {
+    final query = (q ?? '').trim();
+    final endpoint = query.isEmpty
+        ? 'https://api.giphy.com/v1/gifs/trending?api_key=$_giphyApiKey&limit=24&rating=g'
+        : 'https://api.giphy.com/v1/gifs/search?api_key=$_giphyApiKey&q=${Uri.encodeComponent(query)}&limit=24&rating=g';
+    final res = await http.get(Uri.parse(endpoint));
+    if (res.statusCode != 200) throw Exception('Giphy ${res.statusCode}');
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final data = (body['data'] as List).cast<Map<String, dynamic>>();
+    final gifs = data.map((g) {
+      final images = g['images'] as Map<String, dynamic>?;
+      final full = images?['downsized_medium']?['url'] ??
+          images?['fixed_height']?['url'] ??
+          images?['original']?['url'];
+      final preview = images?['fixed_width']?['url'] ??
+          images?['fixed_width_small']?['url'] ??
+          full;
+      return {'full': full, 'preview': preview};
+    }).where((g) => g['full'] != null).toList();
+    if (!mounted) return;
+    setState(() {
+      _gifs = gifs;
+      _loadingGifs = false;
+      _gifsLoaded = true;
+    });
+  } catch (_) {
+    if (mounted) {
+      setState(() {
+        _gifs = [];
+        _loadingGifs = false;
+        _gifsLoaded = true;
+      });
     }
   }
+}
 
-  String? _detectFirstUrl(String text) {
-    final m = RegExp(r'(https?://[^\s]+)').firstMatch(text);
-    return m?.group(1);
-  }
-
-  Future<Map<String, dynamic>?> _fetchLinkPreview(String url) async {
-    try {
-      final r = await http.get(Uri.parse(
-          'https://api.microlink.io/?url=${Uri.encodeComponent(url)}'));
-      if (r.statusCode != 200) return null;
-      final body = jsonDecode(r.body) as Map<String, dynamic>;
-      if (body['status'] != 'success') return null;
-      final d = body['data'] as Map<String, dynamic>;
-      return {
-        'title': d['title'] ?? '',
-        'description': d['description'] ?? '',
-        'image': (d['image']?['url']) ?? '',
-        'domain': d['publisher'] ??
-            (d['url'] != null ? Uri.parse(d['url'] as String).host : ''),
-        'url': d['url'] ?? url,
-      };
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _loadStickers() async {
-    if (_currentUserId == null || _loadingStickers) return;
-    setState(() => _loadingStickers = true);
-    try {
-      final f = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUserId)
-          .collection('stickers')
-          .orderBy('created_at', descending: true)
-          .limit(200)
-          .get();
-      final packs = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUserId)
-          .collection('sticker_packs')
-          .orderBy('created_at', descending: true)
-          .get();
+Future<void> _startRecording() async {
+  try {
+    final has = await _audioRecorder.hasPermission();
+    if (!has) return;
+    final dir = await getTemporaryDirectory();
+    final path =
+        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _audioRecorder.start(path: path, encoder: AudioEncoder.aacLc);
+    if (!mounted) return;
+    setState(() {
+      _isRecording = true;
+      _recordingPath = path;
+      _recordingSeconds = 0;
+      _recordingWave.clear();
+    });
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (!mounted) return;
       setState(() {
-        _myStickers = f.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        _stickerPacks =
-            packs.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        _favoriteStickers =
-            _myStickers.where((s) => s['favorite'] == true).toList();
-        _loadingStickers = false;
+        _recordingWave.add(0.3 + math.Random().nextDouble() * 0.7);
+        if (_recordingWave.length > 40) _recordingWave.removeAt(0);
       });
-    } catch (_) {
-      if (mounted) setState(() => _loadingStickers = false);
-    }
-  }
+    });
+    Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted || !_isRecording) {
+        t.cancel();
+        return;
+      }
+      setState(() => _recordingSeconds++);
+    });
+  } catch (_) {}
+}
 
-  Future<void> _createStickerFromGallery({bool video = false}) async {
-    final XFile? picked = video
-        ? await _picker.pickVideo(source: ImageSource.gallery)
-        : await _picker.pickImage(
-            source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Creating sticker...')));
+Future<void> _stopRecordingAndSend() async {
+  try {
+    _recordingTimer?.cancel();
+    final path = await _audioRecorder.stop();
+    if (!mounted) return;
+    setState(() => _isRecording = false);
+    if (path == null) return;
+    final file = File(path);
+    final size = await file.length();
+    await _uploadAndSendMedia(
+      file: file,
+      type: 'audio',
+      fileName: 'Voice message',
+      fileSize: _formatFileSize(size),
+      duration: _recordingSeconds,
+    );
+  } catch (_) {}
+}
+
+Future<void> _cancelRecording() async {
+  try {
+    _recordingTimer?.cancel();
+    await _audioRecorder.stop();
+    if (_recordingPath != null) {
+      final f = File(_recordingPath!);
+      if (await f.exists()) await f.delete();
+    }
+  } catch (_) {}
+  if (mounted) setState(() => _isRecording = false);
+}
+
+Future<void> _pickImage() async {
+  if (!_canSendFiles) return;
+  final x = await _picker.pickImage(
+      source: ImageSource.gallery, imageQuality: 90);
+  if (x == null) return;
+  await _openMediaEditor(File(x.path), isVideo: false);
+}
+
+Future<void> _takePhoto() async {
+  if (!_canSendFiles) return;
+  final x = await _picker.pickImage(source: ImageSource.camera);
+  if (x == null) return;
+  await _openMediaEditor(File(x.path), isVideo: false);
+}
+
+Future<void> _pickVideo() async {
+  if (!_canSendFiles) return;
+  final x = await _picker.pickVideo(source: ImageSource.gallery);
+  if (x == null) return;
+  await _openMediaEditor(File(x.path), isVideo: true);
+}
+
+Future<void> _recordVideo() async {
+  if (!_canSendFiles) return;
+  final x = await _picker.pickVideo(source: ImageSource.camera);
+  if (x == null) return;
+  await _openMediaEditor(File(x.path), isVideo: true);
+}
+
+Future<void> _pickFile() async {
+  if (!_canSendFiles) return;
+  final res = await FilePicker.platform.pickFiles(allowMultiple: false);
+  if (res == null || res.files.isEmpty) return;
+  final f = res.files.first;
+  if (f.path == null) return;
+  await _uploadAndSendMedia(
+    file: File(f.path!),
+    type: 'file',
+    fileName: f.name,
+    fileSize: _formatFileSize(f.size),
+  );
+}
+
+Future<void> _openMediaEditor(File file, {required bool isVideo}) async {
+  final result = await Navigator.push<_EditorResult>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => _MediaEditorScreen(
+        initialFile: file,
+        isVideo: isVideo,
+      ),
+    ),
+  );
+  if (result == null) return;
+  final asSticker = await _askSendAsStickerOrPhoto();
+  if (asSticker == null) return;
+  if (asSticker) {
     try {
-      final file = File(picked.path);
-      final url = video
+      final url = isVideo
           ? await CloudinaryService.uploadVideo(
-              file, 'aurachat/stickers/$_currentUserId')
+              result.file, 'aurachat/stickers/$_currentUserId')
           : await CloudinaryService.uploadImage(
-              file, 'aurachat/stickers/$_currentUserId');
+              result.file, 'aurachat/stickers/$_currentUserId');
       if (url == null) throw Exception('Upload failed');
       final ref = FirebaseFirestore.instance
           .collection('users')
@@ -928,471 +1163,773 @@ class _ChatScreenState extends State<ChatScreen>
       await ref.set({
         'id': ref.id,
         'url': url,
-        'sticker_type': video ? 'video' : 'static',
+        'sticker_type': isVideo ? 'video' : 'static',
         'favorite': false,
         'created_at': FieldValue.serverTimestamp(),
       });
       await _loadStickers();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sticker created')));
-      }
+      await _sendSticker(
+          {'url': url, 'sticker_type': isVideo ? 'video' : 'static'});
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
-  }
-
-  Future<void> _deleteSticker(String id) async {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_currentUserId)
-        .collection('stickers')
-        .doc(id)
-        .delete();
-    await _loadStickers();
-  }
-
-  Future<void> _toggleFavoriteSticker(Map<String, dynamic> s) async {
-    final ref = FirebaseFirestore.instance
-        .collection('users')
-        .doc(_currentUserId)
-        .collection('stickers')
-        .doc(s['id']);
-    await ref.update({'favorite': !(s['favorite'] == true)});
-    await _loadStickers();
-  }
-
-  Future<void> _sendSticker(Map<String, dynamic> s) async {
-    if (_isBlocked || !_canSend || _isAnnouncementsOnly) return;
-    setState(() => _showEmojiPicker = false);
-    await _sendMessage(
-      type: 'sticker',
-      content: '🎨 Sticker',
-      sticker: {
-        'url': s['url'],
-        'sticker_type': s['sticker_type'] ?? 'static',
-      },
-      mediaUrl: s['url'],
-    );
-  }
-
-  Future<void> _sendGif(String url) async {
-    setState(() => _showEmojiPicker = false);
-    await _sendMessage(
-        type: 'gif', content: '🎞️ GIF', gifUrl: url, mediaUrl: url);
-  }
-
-  Future<void> _loadGifs({String? q}) async {
-    if (_loadingGifs) return;
-    setState(() => _loadingGifs = true);
-    try {
-      final query = (q ?? '').trim();
-      final endpoint = query.isEmpty
-          ? 'https://api.giphy.com/v1/gifs/trending?api_key=$_giphyApiKey&limit=24&rating=g'
-          : 'https://api.giphy.com/v1/gifs/search?api_key=$_giphyApiKey&q=${Uri.encodeComponent(query)}&limit=24&rating=g';
-      final res = await http.get(Uri.parse(endpoint));
-      if (res.statusCode != 200) throw Exception('Giphy ${res.statusCode}');
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final data = (body['data'] as List).cast<Map<String, dynamic>>();
-      final gifs = data.map((g) {
-        final images = g['images'] as Map<String, dynamic>?;
-        final full = images?['downsized_medium']?['url'] ??
-            images?['fixed_height']?['url'] ??
-            images?['original']?['url'];
-        final preview = images?['fixed_width']?['url'] ??
-            images?['fixed_width_small']?['url'] ??
-            full;
-        return {'full': full, 'preview': preview};
-      }).where((g) => g['full'] != null).toList();
-      if (!mounted) return;
-      setState(() {
-        _gifs = gifs;
-        _loadingGifs = false;
-        _gifsLoaded = true;
-      });
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _gifs = [];
-          _loadingGifs = false;
-          _gifsLoaded = true;
-        });
-      }
-    }
-  }
-
-  Future<void> _startRecording() async {
-    try {
-      final has = await _audioRecorder.hasPermission();
-      if (!has) return;
-      final dir = await getTemporaryDirectory();
-      final path =
-          '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _audioRecorder.start(path: path, encoder: AudioEncoder.aacLc);
-      if (!mounted) return;
-      setState(() {
-        _isRecording = true;
-        _recordingPath = path;
-        _recordingSeconds = 0;
-        _recordingWave.clear();
-      });
-      _recordingTimer?.cancel();
-      _recordingTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
-        if (!mounted) return;
-        setState(() {
-          _recordingWave.add(0.3 + math.Random().nextDouble() * 0.7);
-          if (_recordingWave.length > 40) _recordingWave.removeAt(0);
-        });
-      });
-      Timer.periodic(const Duration(seconds: 1), (t) {
-        if (!mounted || !_isRecording) {
-          t.cancel();
-          return;
-        }
-        setState(() => _recordingSeconds++);
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _stopRecordingAndSend() async {
-    try {
-      _recordingTimer?.cancel();
-      final path = await _audioRecorder.stop();
-      if (!mounted) return;
-      setState(() => _isRecording = false);
-      if (path == null) return;
-      final file = File(path);
-      final size = await file.length();
-      await _uploadAndSendMedia(
-        file: file,
-        type: 'audio',
-        fileName: 'Voice message',
-        fileSize: _formatFileSize(size),
-        duration: _recordingSeconds,
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _cancelRecording() async {
-    try {
-      _recordingTimer?.cancel();
-      await _audioRecorder.stop();
-      if (_recordingPath != null) {
-        final f = File(_recordingPath!);
-        if (await f.exists()) await f.delete();
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _isRecording = false);
-  }
-
-  Future<void> _pickImage() async {
-    if (!_canSendFiles) return;
-    final x = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 90);
-    if (x == null) return;
-    await _openMediaEditor(File(x.path), isVideo: false);
-  }
-
-  Future<void> _takePhoto() async {
-    if (!_canSendFiles) return;
-    final x = await _picker.pickImage(source: ImageSource.camera);
-    if (x == null) return;
-    await _openMediaEditor(File(x.path), isVideo: false);
-  }
-
-  Future<void> _pickVideo() async {
-    if (!_canSendFiles) return;
-    final x = await _picker.pickVideo(source: ImageSource.gallery);
-    if (x == null) return;
-    await _openMediaEditor(File(x.path), isVideo: true);
-  }
-
-  Future<void> _recordVideo() async {
-    if (!_canSendFiles) return;
-    final x = await _picker.pickVideo(source: ImageSource.camera);
-    if (x == null) return;
-    await _openMediaEditor(File(x.path), isVideo: true);
-  }
-
-  Future<void> _pickFile() async {
-    if (!_canSendFiles) return;
-    final res = await FilePicker.platform.pickFiles(allowMultiple: false);
-    if (res == null || res.files.isEmpty) return;
-    final f = res.files.first;
-    if (f.path == null) return;
+  } else {
     await _uploadAndSendMedia(
-      file: File(f.path!),
-      type: 'file',
-      fileName: f.name,
-      fileSize: _formatFileSize(f.size),
+      file: result.file,
+      type: isVideo ? 'video' : 'image',
+      fileName: isVideo ? 'Video' : 'Photo',
     );
   }
+}
 
-  Future<void> _openMediaEditor(File file, {required bool isVideo}) async {
-    final result = await Navigator.push<_EditorResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _MediaEditorScreen(
-          initialFile: file,
-          isVideo: isVideo,
-        ),
-      ),
-    );
-    if (result == null) return;
-    final asSticker = await _askSendAsStickerOrPhoto();
-    if (asSticker == null) return;
-    if (asSticker) {
-      try {
-        final url = isVideo
-            ? await CloudinaryService.uploadVideo(
-                result.file, 'aurachat/stickers/$_currentUserId')
-            : await CloudinaryService.uploadImage(
-                result.file, 'aurachat/stickers/$_currentUserId');
-        if (url == null) throw Exception('Upload failed');
-        final ref = FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUserId)
-            .collection('stickers')
-            .doc();
-        await ref.set({
-          'id': ref.id,
-          'url': url,
-          'sticker_type': isVideo ? 'video' : 'static',
-          'favorite': false,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-        await _loadStickers();
-        await _sendSticker(
-            {'url': url, 'sticker_type': isVideo ? 'video' : 'static'});
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
-      }
-    } else {
-      await _uploadAndSendMedia(
-        file: result.file,
-        type: isVideo ? 'video' : 'image',
-        fileName: isVideo ? 'Video' : 'Photo',
-      );
-    }
-  }
-
-  Future<bool?> _askSendAsStickerOrPhoto() {
-    return showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _glassSheet(
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Send as',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _bigChoice(
-                        icon: Icons.auto_awesome,
-                        title: 'Sticker',
-                        sub: 'Transparent, no bubble',
-                        onTap: () => Navigator.pop(context, true),
-                      ),
+Future<bool?> _askSendAsStickerOrPhoto() {
+  return showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _glassSheet(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Send as',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _bigChoice(
+                      icon: Icons.auto_awesome,
+                      title: 'Sticker',
+                      sub: 'Transparent, no bubble',
+                      onTap: () => Navigator.pop(context, true),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _bigChoice(
-                        icon: Icons.image,
-                        title: 'Photo',
-                        sub: 'Normal image message',
-                        onTap: () => Navigator.pop(context, false),
-                      ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _bigChoice(
+                      icon: Icons.image,
+                      title: 'Photo',
+                      sub: 'Normal image message',
+                      onTap: () => Navigator.pop(context, false),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: const Text('Cancel',
-                      style: TextStyle(color: Colors.white54)),
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: const Text('Cancel',
+                    style: TextStyle(color: Colors.white54)),
+              ),
+            ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _bigChoice({
-    required IconData icon,
-    required String title,
-    required String sub,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 28, color: const Color(0xFF8B5CF6)),
-            const SizedBox(height: 8),
-            Text(title,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
-            Text(sub,
-                style:
-                    const TextStyle(color: Colors.white54, fontSize: 11)),
-          ],
-        ),
+Widget _bigChoice({
+  required IconData icon,
+  required String title,
+  required String sub,
+  required VoidCallback onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
-    );
-  }
+      child: Column(
+        children: [
+          Icon(icon, size: 28, color: const Color(0xFF8B5CF6)),
+          const SizedBox(height: 8),
+          Text(title,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(sub,
+              style:
+                  const TextStyle(color: Colors.white54, fontSize: 11)),
+        ],
+      ),
+    ),
+  );
+}
 
-  Future<void> _uploadAndSendMedia({
-    required File file,
-    required String type,
-    String? fileName,
-    String? fileSize,
-    int? duration,
-    bool viewOnce = false,
-  }) async {
-    if (_currentUserId == null || _chatId == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Row(children: [
-        SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2)),
-        SizedBox(width: 12),
-        Text('Uploading...'),
-      ]),
-      duration: Duration(seconds: 60),
-    ));
-    try {
-      String? url;
-      if (type == 'image') {
-        url = await CloudinaryService.uploadImage(
-            file, 'aurachat/chats/$_chatId');
-      } else if (type == 'video') {
-        url = await CloudinaryService.uploadVideo(
-            file, 'aurachat/chats/$_chatId');
-      } else if (type == 'audio') {
-        url = await CloudinaryService.uploadAudio(
-            file, 'aurachat/chats/$_chatId');
-      } else {
-        url =
-            await CloudinaryService.uploadFile(file, 'aurachat/chats/$_chatId');
-      }
-      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      if (url == null) throw Exception('Upload failed');
-      await _sendMessage(
-        type: type,
-        content: fileName ?? type,
-        mediaUrl: url,
-        fileName: fileName,
-        fileSize: fileSize,
-        duration: duration,
-        viewOnce: viewOnce,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+Future<void> _uploadAndSendMedia({
+  required File file,
+  required String type,
+  String? fileName,
+  String? fileSize,
+  int? duration,
+  bool viewOnce = false,
+}) async {
+  if (_currentUserId == null || _chatId == null) return;
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+    content: Row(children: [
+      SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2)),
+      SizedBox(width: 12),
+      Text('Uploading...'),
+    ]),
+    duration: Duration(seconds: 60),
+  ));
+  try {
+    String? url;
+    if (type == 'image') {
+      url = await CloudinaryService.uploadImage(
+          file, 'aurachat/chats/$_chatId');
+    } else if (type == 'video') {
+      url = await CloudinaryService.uploadVideo(
+          file, 'aurachat/chats/$_chatId');
+    } else if (type == 'audio') {
+      url = await CloudinaryService.uploadAudio(
+          file, 'aurachat/chats/$_chatId');
+    } else {
+      url =
+          await CloudinaryService.uploadFile(file, 'aurachat/chats/$_chatId');
     }
+    if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (url == null) throw Exception('Upload failed');
+    await _sendMessage(
+      type: type,
+      content: fileName ?? type,
+      mediaUrl: url,
+      fileName: fileName,
+      fileSize: fileSize,
+      duration: duration,
+      viewOnce: viewOnce,
+    );
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Upload failed: $e')));
   }
-
+}
   Future<void> _playVoice(String id, String url) async {
-    try {
-      if (_currentlyPlayingAudioId == id) {
-        if (_audioPlayer.playing) {
-          await _audioPlayer.pause();
-        } else {
-          await _audioPlayer.play();
-        }
-        return;
+  try {
+    if (_currentlyPlayingAudioId == id) {
+      if (_audioPlayer.playing) {
+        await _audioPlayer.pause();
+      } else {
+        await _audioPlayer.play();
       }
-      await _audioPlayer.stop();
-      await _audioPlayer.setUrl(url);
-      setState(() => _currentlyPlayingAudioId = id);
-      await _audioPlayer.play();
-    } catch (_) {}
-  }
+      return;
+    }
+    await _audioPlayer.stop();
+    await _audioPlayer.setUrl(url);
+    setState(() => _currentlyPlayingAudioId = id);
+    await _audioPlayer.play();
+  } catch (_) {}
+}
 
-  Future<void> _openFile(String url, String? fileName) async {
-    try {
-      final dir = await getTemporaryDirectory();
-      final ext = fileName?.split('.').last ?? 'bin';
-      final path = '${dir.path}/${const Uuid().v4()}.$ext';
-      final client = HttpClient();
-      final req = await client.getUrl(Uri.parse(url));
-      final resp = await req.close();
-      final f = File(path);
-      await resp.pipe(f.openWrite());
-      await OpenFilex.open(path);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Cannot open: $e')));
-      }
+Future<void> _openFile(String url, String? fileName) async {
+  try {
+    final dir = await getTemporaryDirectory();
+    final ext = fileName?.split('.').last ?? 'bin';
+    final path = '${dir.path}/${const Uuid().v4()}.$ext';
+    final client = HttpClient();
+    final req = await client.getUrl(Uri.parse(url));
+    final resp = await req.close();
+    final f = File(path);
+    await resp.pipe(f.openWrite());
+    await OpenFilex.open(path);
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Cannot open: $e')));
     }
   }
+}
 
-  void _openImageViewer(String url) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            PhotoView(
-              imageProvider: CachedNetworkImageProvider(url),
-              minScale: PhotoViewComputedScale.contained,
-              maxScale: PhotoViewComputedScale.covered * 2,
+void _openImageViewer(String url) {
+  showDialog(
+    context: context,
+    builder: (_) => Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: EdgeInsets.zero,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PhotoView(
+            imageProvider: CachedNetworkImageProvider(url),
+            minScale: PhotoViewComputedScale.contained,
+            maxScale: PhotoViewComputedScale.covered * 2,
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 12,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
             ),
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 12,
-              right: 12,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _openViewOnce(String id, String url, {required bool isVideo}) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _ViewOnceViewer(
+      url: url,
+      isVideo: isVideo,
+      onExpired: () async {
+        if (mounted) Navigator.pop(context);
+        try {
+          await FirebaseFirestore.instance
+              .collection('chats')
+              .doc(_chatId)
+              .collection('messages')
+              .doc(id)
+              .update({
+            'deleted_for_everyone': true,
+            'text': 'This message was deleted',
+            'content': 'This message was deleted',
+            'media_url': null,
+          });
+        } catch (_) {}
+      },
+    ),
+  );
+}
+
+Future<void> _openLocationMap(double lat, double lng) async {
+  final uri =
+      Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+  try {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {}
+}
+
+Future<void> _shareLocation() async {
+  Navigator.pop(context);
+  try {
+    final perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      await Geolocator.requestPermission();
+    }
+    final pos = await Geolocator.getCurrentPosition();
+    String label = 'Shared location';
+    try {
+      final r = await http.get(Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.latitude}&lon=${pos.longitude}&zoom=14'));
+      if (r.statusCode == 200) {
+        final d = jsonDecode(r.body);
+        if (d['display_name'] != null) {
+          label = (d['display_name'] as String).split(',').take(3).join(', ');
+        }
+      }
+    } catch (_) {}
+    await _sendMessage(
+      type: 'location',
+      content: '📍 Location',
+      location: {
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'label': label,
+        'live': false,
+      },
+    );
+  } catch (_) {}
+}
+
+Future<void> _startLiveLocation() async {
+  Navigator.pop(context);
+  try {
+    final perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      await Geolocator.requestPermission();
+    }
+    final first = await Geolocator.getCurrentPosition();
+    final msgId = const Uuid().v4();
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(_chatId)
+        .collection('messages')
+        .doc(msgId)
+        .set({
+      'id': msgId,
+      'sender_id': _currentUserId,
+      'type': 'location',
+      'media_type': 'location',
+      'location_live': true,
+      'location_lat': first.latitude,
+      'location_lng': first.longitude,
+      'location_label': 'Live location',
+      'created_at': FieldValue.serverTimestamp(),
+      'is_read': false,
+      'is_edited': false,
+      'deleted_for_everyone': false,
+      'deleted_for': [],
+      'reactions': {},
+    });
+    _liveSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen((p) async {
+      try {
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(_chatId)
+            .collection('messages')
+            .doc(msgId)
+            .update(
+                {'location_lat': p.latitude, 'location_lng': p.longitude});
+      } catch (_) {}
+    });
+    _liveTimer = Timer(const Duration(minutes: 15), () async {
+      await _liveSub?.cancel();
+      _liveSub = null;
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(_chatId)
+          .collection('messages')
+          .doc(msgId)
+          .update({
+        'location_live': false,
+        'location_label': 'Live location ended',
+      });
+    });
+  } catch (_) {}
+}
+
+Future<void> _openShareContactSheet() async {
+  Navigator.pop(context);
+  if (_currentUserId == null) return;
+  final snap = await FirebaseFirestore.instance
+      .collection('chats')
+      .where('participants', arrayContains: _currentUserId)
+      .get();
+  final contacts = <Map<String, dynamic>>[];
+  for (final doc in snap.docs) {
+    final c = doc.data();
+    if ((c['type'] ?? 'direct') != 'direct') continue;
+    final parts = List<String>.from(c['participants'] ?? []);
+    final otherId =
+        parts.firstWhere((id) => id != _currentUserId, orElse: () => '');
+    if (otherId.isEmpty) continue;
+    if (!_userCache.containsKey(otherId)) {
+      await _fetchMissingUsers({otherId});
+    }
+    final u = _userCache[otherId];
+    if (u != null) contacts.add({'uid': otherId, ...u});
+  }
+  if (!mounted) return;
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _glassSheet(
+      child: SafeArea(
+        child: contacts.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('No contacts found',
+                    style: TextStyle(color: Colors.white54)),
+              )
+            : ListView.builder(
+                shrinkWrap: true,
+                itemCount: contacts.length,
+                itemBuilder: (_, i) {
+                  final c = contacts[i];
+                  final name = c['display_name'] ?? c['username'] ?? 'User';
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          const Color(0xFF8B5CF6).withOpacity(0.3),
+                      backgroundImage: c['avatar_url'] != null
+                          ? CachedNetworkImageProvider(c['avatar_url'])
+                          : null,
+                      child: c['avatar_url'] == null
+                          ? Text(name.toString()[0].toUpperCase())
+                          : null,
+                    ),
+                    title: Text(name.toString(),
+                        style: const TextStyle(color: Colors.white)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _sendMessage(
+                        type: 'contact',
+                        content: '👤 Contact',
+                        contact: {
+                          'uid': c['uid'],
+                          'username': c['username'],
+                          'display_name': name,
+                          'avatar_url': c['avatar_url'],
+                        },
+                      );
+                    },
+                  );
+                },
               ),
+      ),
+    ),
+  );
+}
+
+Future<void> _pickViewOnce() async {
+  final picker = ImagePicker();
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _glassSheet(
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            const Text('View once',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.image, color: Color(0xFF8B5CF6)),
+              title: const Text('Pick photo',
+                  style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context, 'photo'),
             ),
+            ListTile(
+              leading:
+                  const Icon(Icons.videocam, color: Color(0xFF8B5CF6)),
+              title: const Text('Pick video',
+                  style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context, 'video'),
+            ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+  if (choice == null) return;
+  final x = choice == 'photo'
+      ? await picker.pickImage(source: ImageSource.gallery)
+      : await picker.pickVideo(source: ImageSource.gallery);
+  if (x == null) return;
+  await _uploadAndSendMedia(
+    file: File(x.path),
+    type: choice == 'photo' ? 'image' : 'video',
+    fileName: choice == 'photo' ? 'Photo' : 'Video',
+    viewOnce: true,
+  );
+}
 
-  void _openViewOnce(String id, String url, {required bool isVideo}) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _ViewOnceViewer(
-        url: url,
-        isVideo: isVideo,
-        onExpired: () async {
-          if (mounted) Navigator.pop(context);
-          try {
+void _showMessageOptions(Map<String, dynamic> m) {
+  final isMe = m['sender_id'] == _currentUserId;
+  final isDeleted = m['deleted_for_everyone'] == true;
+  final isText = (m['media_type'] ?? 'text') == 'text';
+  final isEdited = m['is_edited'] == true;
+  _selectedMessageId = m['id'];
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _glassSheet(
+      child: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!isDeleted) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final e in const ['❤️', '👍', '😂', '😮', '😢', '🔥'])
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.pop(context);
+                            _quickReact(m['id'], e);
+                          },
+                          child:
+                              Text(e, style: const TextStyle(fontSize: 28)),
+                        ),
+                      ),
+                  ],
+                ),
+                const Divider(color: Colors.white10),
+              ],
+              if (isMe && isText && !isDeleted)
+                _sheetTile(Icons.edit, 'Edit', () {
+                  Navigator.pop(context);
+                  _openEditDialog(m);
+                }),
+              if (isEdited && !isDeleted)
+                _sheetTile(Icons.history, 'Edit history', () {
+                  Navigator.pop(context);
+                  _openEditHistory(m['id']);
+                }),
+              if (isText && !isDeleted)
+                _sheetTile(Icons.copy, 'Copy', () {
+                  Navigator.pop(context);
+                  Clipboard.setData(
+                      ClipboardData(text: (m['text'] ?? '').toString()));
+                }),
+              if (!isDeleted) ...[
+                _sheetTile(Icons.reply, 'Reply', () {
+                  Navigator.pop(context);
+                  _setReply(m);
+                }),
+                _sheetTile(Icons.share, 'Forward', () {
+                  Navigator.pop(context);
+                  _forwardMessage(m);
+                }),
+                _sheetTile(Icons.push_pin, 'Pin', () {
+                  Navigator.pop(context);
+                  _pinMessage(m['id']);
+                }),
+                _sheetTile(Icons.bookmark, 'Save', () {
+                  Navigator.pop(context);
+                  _saveMessage(m);
+                }),
+                if (m['media_url'] != null)
+                  _sheetTile(Icons.download, 'Download', () {
+                    Navigator.pop(context);
+                    _downloadMedia(m['media_url'], m['file_name'] ?? 'file');
+                  }),
+                _sheetTile(Icons.check_circle, 'Select', () {
+                  Navigator.pop(context);
+                  _enterMultiSelect(m['id']);
+                }),
+              ],
+              if (!isMe && !isDeleted)
+                _sheetTile(Icons.report, 'Report', () {
+                  Navigator.pop(context);
+                  _openReportDialog(m);
+                }, color: Colors.orange),
+              if (isMe && !isDeleted)
+                _sheetTile(Icons.delete_forever, 'Delete for everyone', () {
+                  Navigator.pop(context);
+                  _confirmDelete(m['id']);
+                }, color: Colors.red),
+              if (!isDeleted)
+                _sheetTile(Icons.delete, 'Delete for me', () {
+                  Navigator.pop(context);
+                  _deleteForMe(m['id']);
+                }, color: Colors.red),
+              _sheetTile(Icons.close, 'Cancel', () => Navigator.pop(context),
+                  color: Colors.white38),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _sheetTile(IconData i, String label, VoidCallback onTap,
+    {Color? color}) {
+  return ListTile(
+    leading: Icon(i, color: color ?? const Color(0xFF8B5CF6)),
+    title: Text(label,
+        style: TextStyle(color: color ?? Colors.white, fontSize: 14)),
+    onTap: onTap,
+  );
+}
+
+Future<void> _quickReact(String id, String emoji) async {
+  if (_currentUserId == null) return;
+  final ref = FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('messages')
+      .doc(id);
+  final doc = await ref.get();
+  if (!doc.exists) return;
+  final r = Map<String, dynamic>.from(doc.data()?['reactions'] ?? {});
+  final users = List<String>.from(r[emoji] ?? []);
+  if (users.contains(_currentUserId)) {
+    users.remove(_currentUserId);
+  } else {
+    users.add(_currentUserId!);
+  }
+  if (users.isEmpty) {
+    r.remove(emoji);
+  } else {
+    r[emoji] = users;
+  }
+  await ref.update({'reactions': r});
+}
+
+void _setReply(Map<String, dynamic> m) {
+  setState(() {
+    _replyingTo = m['id'];
+    _replyingToContent =
+        (m['text'] ?? m['content'] ?? m['media_type'] ?? 'Media').toString();
+    final u = _userCache[m['sender_id']];
+    _replyingToSender =
+        (u?['display_name'] ?? u?['username'] ?? 'Unknown').toString();
+  });
+}
+
+void _openEditDialog(Map<String, dynamic> m) {
+  _editController.text = (m['text'] ?? m['content'] ?? '').toString();
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1a103c),
+      title: const Text('Edit message',
+          style: TextStyle(color: Colors.white)),
+      content: TextField(
+        controller: _editController,
+        maxLines: null,
+        style: const TextStyle(color: Colors.white),
+        decoration: _inputDeco('New text...'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child:
+              const Text('Cancel', style: TextStyle(color: Colors.white54)),
+        ),
+        TextButton(
+          onPressed: () async {
+            final id = m['id'];
+            final t = _editController.text.trim();
+            Navigator.pop(context);
+            if (t.isEmpty) return;
+            await FirebaseFirestore.instance
+                .collection('chats')
+                .doc(_chatId)
+                .collection('messages')
+                .doc(id)
+                .update({
+              'text': t,
+              'content': t,
+              'is_edited': true,
+              'updated_at': FieldValue.serverTimestamp(),
+            });
+          },
+          child: const Text('Save',
+              style: TextStyle(color: Color(0xFF8B5CF6))),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _openEditHistory(String msgId) async {
+  final doc = await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('messages')
+      .doc(msgId)
+      .get();
+  if (!doc.exists) return;
+  final d = doc.data()!;
+  final history = (d['edit_history'] as List?) ?? [];
+  if (!mounted) return;
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1a103c),
+      title: const Text('Version history',
+          style: TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: 320,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            _histTile('Current',
+                (d['text'] ?? d['content'] ?? '').toString(),
+                highlight: true),
+            for (final h in history.reversed)
+              _histTile(
+                _fmtTs(h['edited_at']),
+                (h['text'] ?? '').toString(),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _histTile(String time, String text, {bool highlight = false}) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: highlight
+          ? const Color(0xFF8B5CF6).withOpacity(0.08)
+          : Colors.white.withOpacity(0.03),
+      borderRadius: BorderRadius.circular(8),
+      border: Border(
+        left: BorderSide(
+          color: highlight
+              ? const Color(0xFF8B5CF6)
+              : const Color(0xFF8B5CF6).withOpacity(0.4),
+          width: 3,
+        ),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(time,
+            style: TextStyle(
+                color: highlight
+                    ? const Color(0xFF8B5CF6)
+                    : Colors.white38,
+                fontSize: 10,
+                fontWeight: highlight
+                    ? FontWeight.w600
+                    : FontWeight.normal)),
+        const SizedBox(height: 4),
+        Text(text,
+            style: const TextStyle(color: Colors.white, fontSize: 13)),
+      ],
+    ),
+  );
+}
+
+String _fmtTs(dynamic ts) {
+  if (ts == null) return '';
+  final d = ts is Timestamp ? ts.toDate() : DateTime.tryParse(ts.toString());
+  if (d == null) return '';
+  return DateFormat('MMM d, HH:mm').format(d);
+}
+
+void _confirmDelete(String id) {
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1a103c),
+      title: const Text('Delete for everyone?',
+          style: TextStyle(color: Colors.white)),
+      content: const Text(
+          'This will delete the message for all participants.',
+          style: TextStyle(color: Colors.white70)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child:
+              const Text('Cancel', style: TextStyle(color: Colors.white54)),
+        ),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(context);
             await FirebaseFirestore.instance
                 .collection('chats')
                 .doc(_chatId)
@@ -1404,530 +1941,1286 @@ class _ChatScreenState extends State<ChatScreen>
               'content': 'This message was deleted',
               'media_url': null,
             });
-          } catch (_) {}
-        },
+          },
+          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _deleteForMe(String id) async {
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('messages')
+      .doc(id)
+      .update({
+    'deleted_for': FieldValue.arrayUnion([_currentUserId]),
+  });
+}
+
+Future<void> _pinMessage(String id) async {
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('pinned_messages')
+      .doc(id)
+      .set({
+    'message_id': id,
+    'pinned_at': FieldValue.serverTimestamp(),
+    'pinned_by': _currentUserId,
+    'scope': 'both',
+    'hidden_for': [],
+  });
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .update({'pinned_message_id': id});
+  await _loadPinnedMessages();
+}
+
+Future<void> _unpinMessage(String id) async {
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .collection('pinned_messages')
+      .doc(id)
+      .delete();
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(_chatId)
+      .update({'pinned_message_id': FieldValue.delete()});
+  await _loadPinnedMessages();
+}
+
+Future<void> _saveMessage(Map<String, dynamic> m) async {
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(_currentUserId)
+      .collection('saved')
+      .add({
+    'text': m['text'],
+    'media_url': m['media_url'],
+    'media_type': m['media_type'],
+    'sticker': m['sticker'],
+    'contact': m['contact'],
+    'location_lat': m['location_lat'],
+    'location_lng': m['location_lng'],
+    'location_label': m['location_label'],
+    'from_sender': _userCache[m['sender_id']]?['display_name'],
+    'from_chat': _chatName,
+    'from_chat_id': _chatId,
+    'original_msg_id': m['id'],
+    'saved_at': FieldValue.serverTimestamp(),
+  });
+  if (mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Saved')));
+  }
+}
+  Future<void> _downloadMedia(String url, String name) async {
+  try {
+    final res = await http.get(Uri.parse(url));
+    if (res.statusCode != 200) throw Exception('Download failed');
+    Directory dir;
+    if (Platform.isAndroid) {
+      dir = Directory('/storage/emulated/0/Download/AURA');
+    } else {
+      dir = await getApplicationDocumentsDirectory();
+    }
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final f = File('${dir.path}/$name');
+    await f.writeAsBytes(res.bodyBytes);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved to ${f.path}')));
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+}
+
+Future<void> _forwardMessage(Map<String, dynamic> m) async {
+  final snap = await FirebaseFirestore.instance
+      .collection('chats')
+      .where('participants', arrayContains: _currentUserId)
+      .get();
+  if (!mounted) return;
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _glassSheet(
+      child: SafeArea(
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: snap.docs.length,
+          itemBuilder: (_, i) {
+            final c = snap.docs[i];
+            if (c.id == _chatId) return const SizedBox.shrink();
+            final d = c.data();
+            final name = d['name'] ?? d['title'] ?? 'Chat';
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.3),
+                backgroundImage: d['avatar_url'] != null
+                    ? CachedNetworkImageProvider(d['avatar_url'])
+                    : null,
+                child: d['avatar_url'] == null
+                    ? Text(name.toString()[0].toUpperCase())
+                    : null,
+              ),
+              title: Text(name.toString(),
+                  style: const TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _performForward(m, c.id);
+              },
+            );
+          },
+        ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Future<void> _openLocationMap(double lat, double lng) async {
-    final uri =
-        Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+Future<void> _performForward(
+    Map<String, dynamic> m, String targetChatId) async {
+  final ref = FirebaseFirestore.instance
+      .collection('chats')
+      .doc(targetChatId)
+      .collection('messages')
+      .doc();
+  await ref.set({
+    'id': ref.id,
+    'text': m['text'],
+    'content': m['text'],
+    'media_url': m['media_url'],
+    'media_type': m['media_type'] ?? 'text',
+    'file_name': m['file_name'],
+    'file_size': m['file_size'],
+    'duration': m['duration'],
+    'sticker': m['sticker'],
+    'contact': m['contact'],
+    'location_lat': m['location_lat'],
+    'location_lng': m['location_lng'],
+    'location_label': m['location_label'],
+    'sender_id': _currentUserId,
+    'is_forwarded': true,
+    'created_at': FieldValue.serverTimestamp(),
+    'is_read': false,
+    'is_edited': false,
+    'deleted_for_everyone': false,
+    'deleted_for': [],
+    'reactions': {},
+  });
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(targetChatId)
+      .update({
+    'last_message': '📤 Forwarded',
+    'last_message_at': FieldValue.serverTimestamp(),
+  });
+  if (mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Forwarded')));
   }
+}
 
-  Future<void> _shareLocation() async {
-    Navigator.pop(context);
+void _enterMultiSelect(String id) {
+  setState(() {
+    _multiSelectMode = true;
+    _selectedMessageIds.clear();
+    _selectedMessageIds.add(id);
+  });
+}
+
+void _exitMultiSelect() {
+  setState(() {
+    _multiSelectMode = false;
+    _selectedMessageIds.clear();
+  });
+}
+
+void _toggleMultiSelect(String id) {
+  setState(() {
+    if (_selectedMessageIds.contains(id)) {
+      _selectedMessageIds.remove(id);
+    } else {
+      _selectedMessageIds.add(id);
+    }
+    if (_selectedMessageIds.isEmpty) _multiSelectMode = false;
+  });
+}
+
+Future<void> _blockUser() async {
+  if (_otherUserId == null || _currentUserId == null) return;
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(_currentUserId)
+      .update({
+    'blocked_users': FieldValue.arrayUnion([_otherUserId]),
+  });
+  if (mounted) setState(() => _iBlockedThem = true);
+}
+
+Future<void> _unblockUser() async {
+  if (_otherUserId == null || _currentUserId == null) return;
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(_currentUserId)
+      .update({
+    'blocked_users': FieldValue.arrayRemove([_otherUserId]),
+  });
+  if (mounted) setState(() => _iBlockedThem = false);
+}
+
+void _openNicknameDialog() {
+  final ctrl = TextEditingController(text: _otherUserNickname ?? '');
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1a103c),
+      title: const Text('Nickname', style: TextStyle(color: Colors.white)),
+      content: TextField(
+        controller: ctrl,
+        style: const TextStyle(color: Colors.white),
+        decoration: _inputDeco('Enter nickname...'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child:
+              const Text('Cancel', style: TextStyle(color: Colors.white54)),
+        ),
+        TextButton(
+          onPressed: () async {
+            final v = ctrl.text.trim();
+            Navigator.pop(context);
+            if (_otherUserId == null) return;
+            if (v.isEmpty) {
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(_currentUserId)
+                  .collection('nicknames')
+                  .doc(_otherUserId)
+                  .delete()
+                  .catchError((_) {});
+              if (mounted) setState(() => _otherUserNickname = null);
+            } else {
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(_currentUserId)
+                  .collection('nicknames')
+                  .doc(_otherUserId)
+                  .set({
+                'nickname': v,
+                'updated_at': FieldValue.serverTimestamp(),
+              });
+              if (mounted) setState(() => _otherUserNickname = v);
+            }
+          },
+          child: const Text('Save',
+              style: TextStyle(color: Color(0xFF8B5CF6))),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _openReportDialog(Map<String, dynamic> m) async {
+  final ctrl = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF1a103c),
+      title: const Text('Report message',
+          style: TextStyle(color: Colors.white)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Why are you reporting this?',
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: ctrl,
+            maxLines: 3,
+            style: const TextStyle(color: Colors.white),
+            decoration: _inputDeco('Add details (optional)...'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel',
+              style: TextStyle(color: Colors.white54)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Report',
+              style: TextStyle(color: Colors.orange)),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) {
     try {
-      final perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        await Geolocator.requestPermission();
+      await FirebaseFirestore.instance.collection('reports').add({
+        'reporter_id': _currentUserId,
+        'reported_user_id': m['sender_id'],
+        'chat_id': _chatId,
+        'message_id': m['id'],
+        'message_content': m['text'] ?? m['content'] ?? '',
+        'media_type': m['media_type'] ?? 'text',
+        'media_url': m['media_url'],
+        'details': ctrl.text.trim(),
+        'created_at': FieldValue.serverTimestamp(),
+        'status': 'pending',
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Report submitted')));
       }
-      final pos = await Geolocator.getCurrentPosition();
-      String label = 'Shared location';
-      try {
-        final r = await http.get(Uri.parse(
-            'https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.latitude}&lon=${pos.longitude}&zoom=14'));
-        if (r.statusCode == 200) {
-          final d = jsonDecode(r.body);
-          if (d['display_name'] != null) {
-            label = (d['display_name'] as String).split(',').take(3).join(', ');
-          }
-        }
-      } catch (_) {}
-      await _sendMessage(
-        type: 'location',
-        content: '📍 Location',
-        location: {
-          'lat': pos.latitude,
-          'lng': pos.longitude,
-          'label': label,
-          'live': false,
-        },
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _startLiveLocation() async {
-    Navigator.pop(context);
-    try {
-      final perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        await Geolocator.requestPermission();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to submit')));
       }
-      final first = await Geolocator.getCurrentPosition();
-      final msgId = const Uuid().v4();
-      await FirebaseFirestore.instance
+    }
+  }
+}
+
+Widget _glassSheet({required Widget child}) {
+  return ClipRRect(
+    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1a103c).withOpacity(0.92),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border:
+              Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+        ),
+        child: child,
+      ),
+    ),
+  );
+}
+
+Future<void> _startCall(bool video) async {
+  if (!_isGroup && _isBlocked) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Unblock to call')));
+    return;
+  }
+  if (_otherUserId == null && !_isGroup) return;
+  final channel = CallService.generateChannelName();
+  if (!mounted) return;
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => CallScreen.active(
+        channelName: channel,
+        isVideoCall: video,
+        targetUserId: _otherUserId ?? _chatId ?? 'unknown',
+        targetUserName: _chatName ?? 'Unknown',
+      ),
+    ),
+  );
+}
+
+@override
+void dispose() {
+  _messageController.removeListener(_onTextChanged);
+  _scrollController.removeListener(_onScroll);
+  WidgetsBinding.instance.removeObserver(this);
+  _messageController.dispose();
+  _editController.dispose();
+  _searchController.dispose();
+  _gifSearchController.dispose();
+  _scrollController.dispose();
+  _audioPlayer.dispose();
+  _audioRecorder.dispose();
+  _messageSubscription?.cancel();
+  _chatSubscription?.cancel();
+  _typingSubscription?.cancel();
+  _statusSubscription?.cancel();
+  _liveSub?.cancel();
+  _liveTimer?.cancel();
+  for (final s in _blockUnsub) {
+    s.cancel();
+  }
+  _otherTypingHideTimer?.cancel();
+  _typingTimer?.cancel();
+  _recordingTimer?.cancel();
+  _onlineHeartbeat?.cancel();
+  for (final v in _videoControllers.values) {
+    v.dispose();
+  }
+  final uid = _currentUserId;
+  if (uid != null) {
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .update({
+      'is_online': false,
+      'last_seen': FieldValue.serverTimestamp(),
+    }).catchError((_) {});
+    if (_chatId != null) {
+      FirebaseFirestore.instance
           .collection('chats')
           .doc(_chatId)
-          .collection('messages')
-          .doc(msgId)
-          .set({
-        'id': msgId,
-        'sender_id': _currentUserId,
-        'type': 'location',
-        'media_type': 'location',
-        'location_live': true,
-        'location_lat': first.latitude,
-        'location_lng': first.longitude,
-        'location_label': 'Live location',
-        'created_at': FieldValue.serverTimestamp(),
-        'is_read': false,
-        'is_edited': false,
-        'deleted_for_everyone': false,
-        'deleted_for': [],
-        'reactions': {},
-      });
-      _liveSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10,
+          .collection('typing')
+          .doc(uid)
+          .delete()
+          .catchError((_) {});
+    }
+  }
+  super.dispose();
+}
+
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFF0A0A0F),
+    appBar: _isSearching ? _buildSearchAppBar() : _buildHeader(),
+    body: Stack(
+      children: [
+        Column(
+          children: [
+            if (_pinnedMessages.isNotEmpty) _buildPinnedBanner(),
+            if (_isBlocked) _buildBlockedBanner(),
+            if (!_canSend || _isAnnouncementsOnly) _buildAdminBanner(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          color: Color(0xFF8B5CF6)))
+                  : _messages.isEmpty
+                      ? const _EmptyState()
+                      : _buildMessageList(),
+            ),
+            if (_otherUserTyping && !_isGroup && !_isBlocked)
+              _buildTypingIndicator(),
+            if (_replyingTo != null) _buildReplyBar(),
+            if (_multiSelectMode) _buildMultiSelectBar(),
+            if (_isRecording) _buildRecordingBar(),
+            if (_showEmojiPicker) _buildPickerPanel(),
+            _buildInputBar(),
+          ],
         ),
-      ).listen((p) async {
-        try {
-          await FirebaseFirestore.instance
-              .collection('chats')
-              .doc(_chatId)
-              .collection('messages')
-              .doc(msgId)
-              .update(
-                  {'location_lat': p.latitude, 'location_lng': p.longitude});
-        } catch (_) {}
-      });
-      _liveTimer = Timer(const Duration(minutes: 15), () async {
-        await _liveSub?.cancel();
-        _liveSub = null;
-        await FirebaseFirestore.instance
-            .collection('chats')
-            .doc(_chatId)
-            .collection('messages')
-            .doc(msgId)
-            .update({
-          'location_live': false,
-          'location_label': 'Live location ended',
-        });
-      });
-    } catch (_) {}
+        if (_showScrollDown)
+          Positioned(
+            bottom: 90,
+            right: 16,
+            child: GestureDetector(
+              onTap: () {
+                _scrollController.animateTo(
+                  _scrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                );
+              },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1a103c).withOpacity(0.95),
+                  shape: BoxShape.circle,
+                  border:
+                      Border.all(color: Colors.white.withOpacity(0.08)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 20,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.keyboard_arrow_down,
+                    color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+PreferredSizeWidget _buildHeader() {
+  final displayName = _otherUserNickname ?? _chatName ?? 'Chat';
+  final verified = _userCache[_otherUserId]?['is_verified'] == true;
+  String status;
+  Color statusColor;
+  if (_isGroup || _isChannel) {
+    status = 'Tap for info';
+    statusColor = const Color(0xFF06B6D4);
+  } else if (_isBlocked) {
+    status = _iBlockedThem ? 'You blocked this user' : 'Blocked';
+    statusColor = Colors.red.shade300;
+  } else if (_otherUserTyping) {
+    status = 'typing...';
+    statusColor = const Color(0xFF06B6D4);
+  } else if (_otherUserOnline) {
+    status = 'Online';
+    statusColor = const Color(0xFF22C55E);
+  } else if (_otherUserLastSeen != null) {
+    status = 'Last seen ${_timeAgo(_otherUserLastSeen!)}';
+    statusColor = Colors.white54;
+  } else {
+    status = 'Offline';
+    statusColor = Colors.white54;
   }
 
-  Future<void> _openShareContactSheet() async {
-    Navigator.pop(context);
-    if (_currentUserId == null) return;
-    final snap = await FirebaseFirestore.instance
-        .collection('chats')
-        .where('participants', arrayContains: _currentUserId)
-        .get();
-    final contacts = <Map<String, dynamic>>[];
-    for (final doc in snap.docs) {
-      final c = doc.data();
-      if ((c['type'] ?? 'direct') != 'direct') continue;
-      final parts = List<String>.from(c['participants'] ?? []);
-      final otherId =
-          parts.firstWhere((id) => id != _currentUserId, orElse: () => '');
-      if (otherId.isEmpty) continue;
-      if (!_userCache.containsKey(otherId)) {
-        await _fetchMissingUsers({otherId});
-      }
-      final u = _userCache[otherId];
-      if (u != null) contacts.add({'uid': otherId, ...u});
-    }
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _glassSheet(
-        child: SafeArea(
-          child: contacts.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text('No contacts found',
-                      style: TextStyle(color: Colors.white54)),
-                )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: contacts.length,
-                  itemBuilder: (_, i) {
-                    final c = contacts[i];
-                    final name = c['display_name'] ?? c['username'] ?? 'User';
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor:
-                            const Color(0xFF8B5CF6).withOpacity(0.3),
-                        backgroundImage: c['avatar_url'] != null
-                            ? CachedNetworkImageProvider(c['avatar_url'])
-                            : null,
-                        child: c['avatar_url'] == null
-                            ? Text(name.toString()[0].toUpperCase())
-                            : null,
-                      ),
-                      title: Text(name.toString(),
-                          style: const TextStyle(color: Colors.white)),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _sendMessage(
-                          type: 'contact',
-                          content: '👤 Contact',
-                          contact: {
-                            'uid': c['uid'],
-                            'username': c['username'],
-                            'display_name': name,
-                            'avatar_url': c['avatar_url'],
+  return PreferredSize(
+    preferredSize: const Size.fromHeight(66),
+    child: ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          padding:
+              const EdgeInsets.only(top: 8, bottom: 8, left: 10, right: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            border: Border(
+                bottom: BorderSide(color: Colors.white.withOpacity(0.06))),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                _headerCircle(
+                  icon: Icons.arrow_back,
+                  onTap: () => Navigator.pop(context),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_isGroup || _isChannel) {
+                        Navigator.pushNamed(context, '/group_info',
+                            arguments: {
+                              'chatId': _chatId,
+                              'chatName': _chatName,
+                              'chatAvatar': _chatAvatar,
+                              'isChannel': _isChannel,
+                            });
+                        return;
+                      }
+                      if (_otherUserId != null) {
+                        Navigator.pushNamed(
+                          context,
+                          '/public_profile',
+                          arguments: {
+                            'userId': _otherUserId,
+                            'username': displayName,
+                            'avatar_url': _chatAvatar,
                           },
                         );
-                      },
-                    );
-                  },
-                ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickViewOnce() async {
-    final picker = ImagePicker();
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _glassSheet(
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 12),
-              const Text('View once',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: const Icon(Icons.image, color: Color(0xFF8B5CF6)),
-                title: const Text('Pick photo',
-                    style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.pop(context, 'photo'),
-              ),
-              ListTile(
-                leading:
-                    const Icon(Icons.videocam, color: Color(0xFF8B5CF6)),
-                title: const Text('Pick video',
-                    style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.pop(context, 'video'),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (choice == null) return;
-    final x = choice == 'photo'
-        ? await picker.pickImage(source: ImageSource.gallery)
-        : await picker.pickVideo(source: ImageSource.gallery);
-    if (x == null) return;
-    await _uploadAndSendMedia(
-      file: File(x.path),
-      type: choice == 'photo' ? 'image' : 'video',
-      fileName: choice == 'photo' ? 'Photo' : 'Video',
-      viewOnce: true,
-    );
-  }
-
-  void _showMessageOptions(Map<String, dynamic> m) {
-    final isMe = m['sender_id'] == _currentUserId;
-    final isDeleted = m['deleted_for_everyone'] == true;
-    final isText = (m['media_type'] ?? 'text') == 'text';
-    final isEdited = m['is_edited'] == true;
-    _selectedMessageId = m['id'];
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _glassSheet(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!isDeleted) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (final e in const ['❤️', '👍', '😂', '😮', '😢', '🔥'])
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.pop(context);
-                              _quickReact(m['id'], e);
-                            },
-                            child:
-                                Text(e, style: const TextStyle(fontSize: 28)),
+                      }
+                    },
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.only(
+                          left: 4, right: 14, top: 4, bottom: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                            color: Colors.white.withOpacity(0.06)),
+                      ),
+                      child: Row(
+                        children: [
+                          Stack(
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFF8B5CF6),
+                                      Color(0xFF06B6D4)
+                                    ],
+                                  ),
+                                ),
+                                child: _chatAvatar != null &&
+                                        _chatAvatar!.isNotEmpty
+                                    ? ClipOval(
+                                        child: CachedNetworkImage(
+                                          imageUrl: _chatAvatar!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : Center(
+                                        child: Text(
+                                          displayName.isNotEmpty
+                                              ? displayName[0].toUpperCase()
+                                              : '?',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                              if (_otherUserOnline && !_isGroup)
+                                Positioned(
+                                  right: -1,
+                                  bottom: -1,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF22C55E),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: const Color(0xFF0A0A0F),
+                                          width: 2),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                        ),
-                    ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        displayName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    if (verified) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.verified,
+                                        color: Color(0xFF1DA1F2),
+                                        size: 13,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                Text(
+                                  status,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 11,
+                                    fontWeight: _otherUserOnline ||
+                                            _otherUserTyping
+                                        ? FontWeight.w500
+                                        : FontWeight.w400,
+                                    fontStyle: _otherUserTyping
+                                        ? FontStyle.italic
+                                        : FontStyle.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const Divider(color: Colors.white10),
-                ],
-                if (isMe && isText && !isDeleted)
-                  _sheetTile(Icons.edit, 'Edit', () {
-                    Navigator.pop(context);
-                    _openEditDialog(m);
-                  }),
-                if (isEdited && !isDeleted)
-                  _sheetTile(Icons.history, 'Edit history', () {
-                    Navigator.pop(context);
-                    _openEditHistory(m['id']);
-                  }),
-                if (isText && !isDeleted)
-                  _sheetTile(Icons.copy, 'Copy', () {
-                    Navigator.pop(context);
-                    Clipboard.setData(
-                        ClipboardData(text: (m['text'] ?? '').toString()));
-                  }),
-                if (!isDeleted) ...[
-                  _sheetTile(Icons.reply, 'Reply', () {
-                    Navigator.pop(context);
-                    _setReply(m);
-                  }),
-                  _sheetTile(Icons.share, 'Forward', () {
-                    Navigator.pop(context);
-                    _forwardMessage(m);
-                  }),
-                  _sheetTile(Icons.push_pin, 'Pin', () {
-                    Navigator.pop(context);
-                    _pinMessage(m['id']);
-                  }),
-                  _sheetTile(Icons.bookmark, 'Save', () {
-                    Navigator.pop(context);
-                    _saveMessage(m);
-                  }),
-                  if (m['media_url'] != null)
-                    _sheetTile(Icons.download, 'Download', () {
-                      Navigator.pop(context);
-                      _downloadMedia(m['media_url'], m['file_name'] ?? 'file');
-                    }),
-                  _sheetTile(Icons.check_circle, 'Select', () {
-                    Navigator.pop(context);
-                    _enterMultiSelect(m['id']);
-                  }),
-                ],
-                if (!isMe && !isDeleted)
-                  _sheetTile(Icons.report, 'Report', () {
-                    Navigator.pop(context);
-                    _openReportDialog(m);
-                  }, color: Colors.orange),
-                if (isMe && !isDeleted)
-                  _sheetTile(Icons.delete_forever, 'Delete for everyone', () {
-                    Navigator.pop(context);
-                    _confirmDelete(m['id']);
-                  }, color: Colors.red),
-                if (!isDeleted)
-                  _sheetTile(Icons.delete, 'Delete for me', () {
-                    Navigator.pop(context);
-                    _deleteForMe(m['id']);
-                  }, color: Colors.red),
-                _sheetTile(Icons.close, 'Cancel', () => Navigator.pop(context),
-                    color: Colors.white38),
+                ),
+                const SizedBox(width: 8),
+                _headerCircle(
+                  icon: Icons.search,
+                  onTap: () => setState(() => _isSearching = true),
+                ),
+                const SizedBox(width: 6),
+                _headerCircle(
+                  icon: Icons.videocam,
+                  onTap: () => _startCall(true),
+                ),
+                const SizedBox(width: 6),
+                _headerCircle(
+                  icon: Icons.call,
+                  onTap: () => _startCall(false),
+                ),
+                const SizedBox(width: 6),
+                _headerCircle(
+                  icon: Icons.more_vert,
+                  onTap: _showMoreMenu,
+                ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _sheetTile(IconData i, String label, VoidCallback onTap,
-      {Color? color}) {
-    return ListTile(
-      leading: Icon(i, color: color ?? const Color(0xFF8B5CF6)),
-      title: Text(label,
-          style: TextStyle(color: color ?? Colors.white, fontSize: 14)),
-      onTap: onTap,
-    );
-  }
-
-  Future<void> _quickReact(String id, String emoji) async {
-    if (_currentUserId == null) return;
-    final ref = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('messages')
-        .doc(id);
-    final doc = await ref.get();
-    if (!doc.exists) return;
-    final r = Map<String, dynamic>.from(doc.data()?['reactions'] ?? {});
-    final users = List<String>.from(r[emoji] ?? []);
-    if (users.contains(_currentUserId)) {
-      users.remove(_currentUserId);
-    } else {
-      users.add(_currentUserId!);
-    }
-    if (users.isEmpty) {
-      r.remove(emoji);
-    } else {
-      r[emoji] = users;
-    }
-    await ref.update({'reactions': r});
-  }
-
-  void _setReply(Map<String, dynamic> m) {
-    setState(() {
-      _replyingTo = m['id'];
-      _replyingToContent =
-          (m['text'] ?? m['content'] ?? m['media_type'] ?? 'Media').toString();
-      final u = _userCache[m['sender_id']];
-      _replyingToSender =
-          (u?['display_name'] ?? u?['username'] ?? 'Unknown').toString();
-    });
-  }
-
-  void _openEditDialog(Map<String, dynamic> m) {
-    _editController.text = (m['text'] ?? m['content'] ?? '').toString();
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1a103c),
-        title: const Text('Edit message',
-            style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: _editController,
-          maxLines: null,
-          style: const TextStyle(color: Colors.white),
-          decoration: _inputDeco('New text...'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:
-                const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () async {
-              final id = m['id'];
-              final t = _editController.text.trim();
-              Navigator.pop(context);
-              if (t.isEmpty) return;
-              await FirebaseFirestore.instance
-                  .collection('chats')
-                  .doc(_chatId)
-                  .collection('messages')
-                  .doc(id)
-                  .update({
-                'text': t,
-                'content': t,
-                'is_edited': true,
-                'updated_at': FieldValue.serverTimestamp(),
-              });
-            },
-            child: const Text('Save',
-                style: TextStyle(color: Color(0xFF8B5CF6))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openEditHistory(String msgId) async {
-    final doc = await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('messages')
-        .doc(msgId)
-        .get();
-    if (!doc.exists) return;
-    final d = doc.data()!;
-    final history = (d['edit_history'] as List?) ?? [];
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1a103c),
-        title: const Text('Version history',
-            style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: 320,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              _histTile('Current',
-                  (d['text'] ?? d['content'] ?? '').toString(),
-                  highlight: true),
-              for (final h in history.reversed)
-                _histTile(
-                  _fmtTs(h['edited_at']),
-                  (h['text'] ?? '').toString(),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _histTile(String time, String text, {bool highlight = false}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
+Widget _headerCircle({
+  required IconData icon,
+  required VoidCallback onTap,
+  Color? iconColor,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
-        color: highlight
-            ? const Color(0xFF8B5CF6).withOpacity(0.08)
-            : Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(8),
-        border: Border(
-          left: BorderSide(
-            color: highlight
-                ? const Color(0xFF8B5CF6)
-                : const Color(0xFF8B5CF6).withOpacity(0.4),
-            width: 3,
-          ),
+        color: Colors.white.withOpacity(0.06),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: iconColor ?? Colors.white70, size: 18),
+    ),
+  );
+}
+
+PreferredSizeWidget _buildSearchAppBar() {
+  return AppBar(
+    backgroundColor: const Color(0xFF0A0A0F),
+    leading: IconButton(
+      icon: const Icon(Icons.arrow_back, color: Colors.white70),
+      onPressed: () => setState(() {
+        _isSearching = false;
+        _searchResults.clear();
+        _searchController.clear();
+      }),
+    ),
+    title: TextField(
+      controller: _searchController,
+      autofocus: true,
+      style: const TextStyle(color: Colors.white),
+      decoration: const InputDecoration(
+        hintText: 'Search messages',
+        hintStyle: TextStyle(color: Colors.white30),
+        border: InputBorder.none,
+      ),
+      onChanged: (q) {
+        final lower = q.toLowerCase();
+        setState(() {
+          _searchResults = _messages
+              .where((m) =>
+                  (m['text'] ?? '').toString().toLowerCase().contains(lower))
+              .toList();
+          _currentSearchIndex = _searchResults.isEmpty ? -1 : 0;
+        });
+      },
+    ),
+  );
+}
+
+void _showMoreMenu() {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _glassSheet(
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            if (!_isGroup && _otherUserId != null)
+              _sheetTile(Icons.person, 'View Profile', () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/public_profile', arguments: {
+                  'userId': _otherUserId,
+                  'username': _chatName,
+                  'avatar_url': _chatAvatar,
+                });
+              }),
+            if (!_isGroup && _otherUserId != null)
+              _sheetTile(Icons.tag, 'Set Nickname', () {
+                Navigator.pop(context);
+                _openNicknameDialog();
+              }),
+            if (_isGroup || _isChannel)
+              _sheetTile(Icons.info_outline, 'Group Info', () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/group_info', arguments: {
+                  'chatId': _chatId,
+                  'chatName': _chatName,
+                  'chatAvatar': _chatAvatar,
+                  'isChannel': _isChannel,
+                });
+              }),
+            _sheetTile(Icons.bookmark, 'Saved Messages', () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const _SavedMessagesScreen()),
+              );
+            }),
+            _sheetTile(Icons.image, 'Create Sticker', () {
+              Navigator.pop(context);
+              _createStickerFromGallery();
+            }),
+            _sheetTile(
+              _iBlockedThem ? Icons.lock_open : Icons.block,
+              _iBlockedThem ? 'Unblock Contact' : 'Block Contact',
+              () {
+                Navigator.pop(context);
+                if (_iBlockedThem) {
+                  _unblockUser();
+                } else {
+                  _blockUser();
+                }
+              },
+              color: Colors.red,
+            ),
+            _sheetTile(Icons.close, 'Cancel', () => Navigator.pop(context),
+                color: Colors.white38),
+          ],
         ),
+      ),
+    ),
+  );
+}
+  Widget _buildPinnedBanner() {
+  return GestureDetector(
+    onTap: () {
+      final first = _pinnedMessages.first;
+      final idx =
+          _messages.indexWhere((m) => m['id'] == first['message_id']);
+      if (idx >= 0 && _scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent - (idx * 80.0),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+      }
+    },
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [
+          const Color(0xFF8B5CF6).withOpacity(0.15),
+          const Color(0xFF06B6D4).withOpacity(0.10),
+        ]),
+        border: Border(
+            bottom: BorderSide(
+                color: const Color(0xFF8B5CF6).withOpacity(0.25))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(time,
-              style: TextStyle(
-                  color: highlight
-                      ? const Color(0xFF8B5CF6)
-                      : Colors.white38,
-                  fontSize: 10,
-                  fontWeight: highlight
-                      ? FontWeight.w600
-                      : FontWeight.normal)),
-          const SizedBox(height: 4),
-          Text(text,
-              style: const TextStyle(color: Colors.white, fontSize: 13)),
+          for (int i = 0; i < _pinnedMessages.length; i++) ...[
+            if (i > 0) const Divider(color: Colors.white12, height: 10),
+            Builder(builder: (context) {
+              final p = _pinnedMessages[i];
+              final msg = _messages.firstWhere(
+                (m) => m['id'] == p['message_id'],
+                orElse: () => {},
+              );
+              return Row(
+                children: [
+                  const Icon(Icons.push_pin,
+                      size: 12, color: Color(0xFF8B5CF6)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          (_userCache[msg['sender_id']]?['display_name'] ??
+                                  'Pinned')
+                              .toString(),
+                          style: const TextStyle(
+                              color: Color(0xFF8B5CF6),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          (msg['text'] ??
+                                  msg['media_type'] ??
+                                  'Message')
+                              .toString(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.75),
+                              fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close,
+                        size: 14, color: Colors.white38),
+                    onPressed: () => _unpinMessage(p['message_id']),
+                  ),
+                ],
+              );
+            }),
+          ],
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  String _fmtTs(dynamic ts) {
-    if (ts == null) return '';
-    final d = ts is Timestamp ? ts.toDate() : DateTime.tryParse(ts.toString());
-    if (d == null) return '';
-    return DateFormat('MMM d, HH:mm').format(d);
-  }
-
-  void _confirmDelete(String id) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1a103c),
-        title: const Text('Delete for everyone?',
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
-            'This will delete the message for all participants.',
-            style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:
-                const Text('Cancel', style: TextStyle(color: Colors.white54)),
+Widget _buildBlockedBanner() {
+  return GestureDetector(
+    onTap: () {
+      if (_iBlockedThem) _unblockUser();
+    },
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      color: Colors.red.withOpacity(0.1),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.block, size: 14, color: Colors.red.shade300),
+          const SizedBox(width: 8),
+          Text(
+            _iBlockedThem
+                ? 'You blocked this person. Tap to unblock.'
+                : 'This user blocked you.',
+            style: TextStyle(color: Colors.red.shade300, fontSize: 12),
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildAdminBanner() {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+    color: Colors.orange.withOpacity(0.15),
+    child: Row(
+      children: [
+        const Icon(Icons.lock_outline, size: 14, color: Colors.orange),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _isAnnouncementsOnly
+                ? 'Announcements only — only admins can send'
+                : 'Chat disabled by admin',
+            style: const TextStyle(color: Colors.orange, fontSize: 12),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildMessageList() {
+  final list = _messages.reversed.toList();
+  return ListView.builder(
+    controller: _scrollController,
+    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+    itemCount: list.length,
+    itemBuilder: (context, index) {
+      final m = list[index];
+      final prev = index > 0 ? list[index - 1] : null;
+      final showDate = _shouldShowDate(m, prev);
+      final isMine = m['sender_id'] == _currentUserId;
+      final selected = _selectedMessageIds.contains(m['id']);
+      return Column(
+        children: [
+          if (showDate) _dateDivider(m['created_at']),
+          _MessageBubble(
+            message: m,
+            isMine: isMine,
+            showAvatar: _isGroup && !isMine,
+            selected: selected,
+            multiSelect: _multiSelectMode,
+            userCache: _userCache,
+            onTap: () {
+              if (_multiSelectMode) {
+                _toggleMultiSelect(m['id']);
+              } else if (m['view_once'] == true && m['media_url'] != null) {
+                _openViewOnce(
+                  m['id'],
+                  m['media_url'],
+                  isVideo: m['media_type'] == 'video',
+                );
+              } else if (m['media_type'] == 'image' &&
+                  m['media_url'] != null) {
+                _openImageViewer(m['media_url']);
+              }
+            },
+            onLongPress: () {
+              if (!_multiSelectMode) _showMessageOptions(m);
+            },
+            onDoubleTap: () => _quickReact(m['id'], '❤️'),
+            onReply: () => _setReply(m),
+            playingAudioId: _currentlyPlayingAudioId,
+            audioPosition: _audioPosition,
+            audioDuration: _audioDuration,
+            onPlayAudio: (id, url) => _playVoice(id, url),
+            onOpenImage: _openImageViewer,
+            onOpenFile: _openFile,
+            onOpenLocation: _openLocationMap,
+            videoControllers: _videoControllers,
+            onVideoInit: () => setState(() {}),
+            onOpenProfile: (uid, name, avatar) {
+              Navigator.pushNamed(context, '/public_profile', arguments: {
+                'userId': uid,
+                'username': name,
+                'avatar_url': avatar,
+              });
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
+bool _shouldShowDate(Map<String, dynamic> m, Map<String, dynamic>? prev) {
+  if (prev == null) return true;
+  final a = _parseTs(m['created_at']);
+  final b = _parseTs(prev['created_at']);
+  if (a == null || b == null) return false;
+  return a.year != b.year || a.month != b.month || a.day != b.day;
+}
+
+DateTime? _parseTs(dynamic t) {
+  if (t == null) return null;
+  if (t is Timestamp) return t.toDate();
+  if (t is String) return DateTime.tryParse(t);
+  return null;
+}
+
+Widget _dateDivider(dynamic ts) {
+  final d = _parseTs(ts);
+  if (d == null) return const SizedBox.shrink();
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          _formatDate(d),
+          style:
+              TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+        ),
+      ),
+    ),
+  );
+}
+
+String _formatDate(DateTime d) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final yest = today.subtract(const Duration(days: 1));
+  final md = DateTime(d.year, d.month, d.day);
+  if (md == today) return 'Today';
+  if (md == yest) return 'Yesterday';
+  return DateFormat('MMM d').format(d);
+}
+
+String _timeAgo(DateTime d) {
+  final diff = DateTime.now().difference(d);
+  if (diff.inSeconds < 60) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  return DateFormat('MMM d, HH:mm').format(d);
+}
+
+Widget _buildTypingIndicator() {
+  final u = _otherUserId != null ? _userCache[_otherUserId] : null;
+  return Padding(
+    padding: const EdgeInsets.only(left: 16, bottom: 6),
+    child: Row(
+      children: [
+        CircleAvatar(
+          radius: 12,
+          backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.3),
+          backgroundImage: u?['avatar_url'] != null
+              ? CachedNetworkImageProvider(u!['avatar_url'])
+              : null,
+          child: u?['avatar_url'] == null
+              ? Text(
+                  (u?['display_name'] ?? 'U').toString()[0].toUpperCase(),
+                  style: const TextStyle(fontSize: 10, color: Colors.white),
+                )
+              : null,
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+              bottomLeft: Radius.circular(4),
+            ),
+          ),
+          child: Row(
+            children: [
+              for (var i = 0; i < 3; i++)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF8B5CF6),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildReplyBar() {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFF1a103c).withOpacity(0.9),
+      border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 3,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFF8B5CF6),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Replying to ${_replyingToSender ?? ''}',
+                  style: const TextStyle(
+                      color: Color(0xFF8B5CF6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600)),
+              Text(
+                _replyingToContent ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, size: 18, color: Colors.white54),
+          onPressed: () => setState(() {
+            _replyingTo = null;
+            _replyingToContent = null;
+            _replyingToSender = null;
+          }),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildMultiSelectBar() {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: const Color(0xFF1a103c).withOpacity(0.95),
+      border: Border(
+          top: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.3))),
+    ),
+    child: Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.white54),
+          onPressed: _exitMultiSelect,
+        ),
+        Text('${_selectedMessageIds.length}',
+            style: const TextStyle(
+                color: Color(0xFF8B5CF6),
+                fontSize: 16,
+                fontWeight: FontWeight.w700)),
+        const Spacer(),
+        IconButton(
+          icon: const Icon(Icons.copy, color: Color(0xFF8B5CF6)),
+          onPressed: () {
+            final text = _messages
+                .where((m) => _selectedMessageIds.contains(m['id']))
+                .map((m) => (m['text'] ?? '').toString())
+                .join('\n\n');
+            Clipboard.setData(ClipboardData(text: text));
+            _exitMultiSelect();
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.share, color: Color(0xFF8B5CF6)),
+          onPressed: () async {
+            final selected = _messages
+                .where((m) => _selectedMessageIds.contains(m['id']))
+                .toList();
+            if (selected.isEmpty) return;
+            final snap = await FirebaseFirestore.instance
+                .collection('chats')
+                .where('participants', arrayContains: _currentUserId)
+                .get();
+            if (!mounted) return;
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: Colors.transparent,
+              builder: (_) => _glassSheet(
+                child: SafeArea(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: snap.docs.length,
+                    itemBuilder: (_, i) {
+                      final c = snap.docs[i];
+                      if (c.id == _chatId) return const SizedBox.shrink();
+                      final d = c.data();
+                      final name = d['name'] ?? d['title'] ?? 'Chat';
+                      return ListTile(
+                        title: Text(name.toString(),
+                            style:
+                                const TextStyle(color: Colors.white)),
+                        onTap: () async {
+                          Navigator.pop(context);
+                          for (final m in selected) {
+                            await _performForward(m, c.id);
+                          }
+                          _exitMultiSelect();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: () async {
+            for (final id in _selectedMessageIds) {
               await FirebaseFirestore.instance
                   .collection('chats')
                   .doc(_chatId)
@@ -1939,1621 +3232,328 @@ class _ChatScreenState extends State<ChatScreen>
                 'content': 'This message was deleted',
                 'media_url': null,
               });
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _deleteForMe(String id) async {
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('messages')
-        .doc(id)
-        .update({
-      'deleted_for': FieldValue.arrayUnion([_currentUserId]),
-    });
-  }
-
-  Future<void> _pinMessage(String id) async {
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('pinned_messages')
-        .doc(id)
-        .set({
-      'message_id': id,
-      'pinned_at': FieldValue.serverTimestamp(),
-      'pinned_by': _currentUserId,
-      'scope': 'both',
-      'hidden_for': [],
-    });
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .update({'pinned_message_id': id});
-    await _loadPinnedMessages();
-  }
-
-  Future<void> _unpinMessage(String id) async {
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('pinned_messages')
-        .doc(id)
-        .delete();
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .update({'pinned_message_id': FieldValue.delete()});
-    await _loadPinnedMessages();
-  }
-
-  Future<void> _saveMessage(Map<String, dynamic> m) async {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_currentUserId)
-        .collection('saved')
-        .add({
-      'text': m['text'],
-      'media_url': m['media_url'],
-      'media_type': m['media_type'],
-      'sticker': m['sticker'],
-      'contact': m['contact'],
-      'location_lat': m['location_lat'],
-      'location_lng': m['location_lng'],
-      'location_label': m['location_label'],
-      'from_sender': _userCache[m['sender_id']]?['display_name'],
-      'from_chat': _chatName,
-      'from_chat_id': _chatId,
-      'original_msg_id': m['id'],
-      'saved_at': FieldValue.serverTimestamp(),
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Saved')));
-    }
-  }
-
-  Future<void> _downloadMedia(String url, String name) async {
-    try {
-      final res = await http.get(Uri.parse(url));
-      if (res.statusCode != 200) throw Exception('Download failed');
-      Directory dir;
-      if (Platform.isAndroid) {
-        dir = Directory('/storage/emulated/0/Download/AURA');
-      } else {
-        dir = await getApplicationDocumentsDirectory();
-      }
-      if (!await dir.exists()) await dir.create(recursive: true);
-      final f = File('${dir.path}/$name');
-      await f.writeAsBytes(res.bodyBytes);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Saved to ${f.path}')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
-      }
-    }
-  }
-
-  Future<void> _forwardMessage(Map<String, dynamic> m) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('chats')
-        .where('participants', arrayContains: _currentUserId)
-        .get();
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _glassSheet(
-        child: SafeArea(
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: snap.docs.length,
-            itemBuilder: (_, i) {
-              final c = snap.docs[i];
-              if (c.id == _chatId) return const SizedBox.shrink();
-              final d = c.data();
-              final name = d['name'] ?? d['title'] ?? 'Chat';
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.3),
-                  backgroundImage: d['avatar_url'] != null
-                      ? CachedNetworkImageProvider(d['avatar_url'])
-                      : null,
-                  child: d['avatar_url'] == null
-                      ? Text(name.toString()[0].toUpperCase())
-                      : null,
-                ),
-                title: Text(name.toString(),
-                    style: const TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _performForward(m, c.id);
-                },
-              );
-            },
-          ),
+            }
+            _exitMultiSelect();
+          },
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
+}
 
-  Future<void> _performForward(
-      Map<String, dynamic> m, String targetChatId) async {
-    final ref = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(targetChatId)
-        .collection('messages')
-        .doc();
-    await ref.set({
-      'id': ref.id,
-      'text': m['text'],
-      'content': m['text'],
-      'media_url': m['media_url'],
-      'media_type': m['media_type'] ?? 'text',
-      'file_name': m['file_name'],
-      'file_size': m['file_size'],
-      'duration': m['duration'],
-      'sticker': m['sticker'],
-      'contact': m['contact'],
-      'location_lat': m['location_lat'],
-      'location_lng': m['location_lng'],
-      'location_label': m['location_label'],
-      'sender_id': _currentUserId,
-      'is_forwarded': true,
-      'created_at': FieldValue.serverTimestamp(),
-      'is_read': false,
-      'is_edited': false,
-      'deleted_for_everyone': false,
-      'deleted_for': [],
-      'reactions': {},
-    });
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(targetChatId)
-        .update({
-      'last_message': '📤 Forwarded',
-      'last_message_at': FieldValue.serverTimestamp(),
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Forwarded')));
-    }
-  }
-
-  void _enterMultiSelect(String id) {
-    setState(() {
-      _multiSelectMode = true;
-      _selectedMessageIds.clear();
-      _selectedMessageIds.add(id);
-    });
-  }
-
-  void _exitMultiSelect() {
-    setState(() {
-      _multiSelectMode = false;
-      _selectedMessageIds.clear();
-    });
-  }
-
-  void _toggleMultiSelect(String id) {
-    setState(() {
-      if (_selectedMessageIds.contains(id)) {
-        _selectedMessageIds.remove(id);
-      } else {
-        _selectedMessageIds.add(id);
-      }
-      if (_selectedMessageIds.isEmpty) _multiSelectMode = false;
-    });
-  }
-
-  Future<void> _blockUser() async {
-    if (_otherUserId == null || _currentUserId == null) return;
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_currentUserId)
-        .update({
-      'blocked_users': FieldValue.arrayUnion([_otherUserId]),
-    });
-    if (mounted) setState(() => _iBlockedThem = true);
-  }
-
-  Future<void> _unblockUser() async {
-    if (_otherUserId == null || _currentUserId == null) return;
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_currentUserId)
-        .update({
-      'blocked_users': FieldValue.arrayRemove([_otherUserId]),
-    });
-    if (mounted) setState(() => _iBlockedThem = false);
-  }
-
-  void _openNicknameDialog() {
-    final ctrl = TextEditingController(text: _otherUserNickname ?? '');
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1a103c),
-        title: const Text('Nickname', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: ctrl,
-          style: const TextStyle(color: Colors.white),
-          decoration: _inputDeco('Enter nickname...'),
+Widget _buildRecordingBar() {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.red.withOpacity(0.08),
+      border: Border(top: BorderSide(color: Colors.red.withOpacity(0.2))),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration:
+              const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:
-                const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () async {
-              final v = ctrl.text.trim();
-              Navigator.pop(context);
-              if (_otherUserId == null) return;
-              if (v.isEmpty) {
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(_currentUserId)
-                    .collection('nicknames')
-                    .doc(_otherUserId)
-                    .delete()
-                    .catchError((_) {});
-                if (mounted) setState(() => _otherUserNickname = null);
-              } else {
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(_currentUserId)
-                    .collection('nicknames')
-                    .doc(_otherUserId)
-                    .set({
-                  'nickname': v,
-                  'updated_at': FieldValue.serverTimestamp(),
-                });
-                if (mounted) setState(() => _otherUserNickname = v);
-              }
-            },
-            child: const Text('Save',
-                style: TextStyle(color: Color(0xFF8B5CF6))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openReportDialog(Map<String, dynamic> m) async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1a103c),
-        title: const Text('Report message',
-            style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Why are you reporting this?',
-                style: TextStyle(color: Colors.white70, fontSize: 13)),
-            const SizedBox(height: 10),
-            TextField(
-              controller: ctrl,
-              maxLines: 3,
-              style: const TextStyle(color: Colors.white),
-              decoration: _inputDeco('Add details (optional)...'),
-            ),
-          ],
+        const SizedBox(width: 12),
+        Text(
+          _fmtDuration(_recordingSeconds),
+          style: const TextStyle(
+              color: Colors.red, fontWeight: FontWeight.w700),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Report',
-                style: TextStyle(color: Colors.orange)),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      try {
-        await FirebaseFirestore.instance.collection('reports').add({
-          'reporter_id': _currentUserId,
-          'reported_user_id': m['sender_id'],
-          'chat_id': _chatId,
-          'message_id': m['id'],
-          'message_content': m['text'] ?? m['content'] ?? '',
-          'media_type': m['media_type'] ?? 'text',
-          'media_url': m['media_url'],
-          'details': ctrl.text.trim(),
-          'created_at': FieldValue.serverTimestamp(),
-          'status': 'pending',
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Report submitted')));
-        }
-      } catch (_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to submit')));
-        }
-      }
-    }
-  }
-
-  Widget _glassSheet({required Widget child}) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF1a103c).withOpacity(0.92),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border:
-                Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _startCall(bool video) async {
-    if (!_isGroup && _isBlocked) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Unblock to call')));
-      return;
-    }
-    if (_otherUserId == null && !_isGroup) return;
-    final channel = CallService.generateChannelName();
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CallScreen.active(
-          channelName: channel,
-          isVideoCall: video,
-          targetUserId: _otherUserId ?? _chatId ?? 'unknown',
-          targetUserName: _chatName ?? 'Unknown',
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _messageController.removeListener(_onTextChanged);
-    _scrollController.removeListener(_onScroll);
-    WidgetsBinding.instance.removeObserver(this);
-    _messageController.dispose();
-    _editController.dispose();
-    _searchController.dispose();
-    _gifSearchController.dispose();
-    _scrollController.dispose();
-    _audioPlayer.dispose();
-    _audioRecorder.dispose();
-    _messageSubscription?.cancel();
-    _chatSubscription?.cancel();
-    _typingSubscription?.cancel();
-    _statusSubscription?.cancel();
-    _liveSub?.cancel();
-    _liveTimer?.cancel();
-    for (final s in _blockUnsub) {
-      s.cancel();
-    }
-    _otherTypingHideTimer?.cancel();
-    _typingTimer?.cancel();
-    _recordingTimer?.cancel();
-    _onlineHeartbeat?.cancel();
-    for (final v in _videoControllers.values) {
-      v.dispose();
-    }
-    final uid = _currentUserId;
-    if (uid != null) {
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .update({
-        'is_online': false,
-        'last_seen': FieldValue.serverTimestamp(),
-      }).catchError((_) {});
-      if (_chatId != null) {
-        FirebaseFirestore.instance
-            .collection('chats')
-            .doc(_chatId)
-            .collection('typing')
-            .doc(uid)
-            .delete()
-            .catchError((_) {});
-      }
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0F),
-      appBar: _isSearching ? _buildSearchAppBar() : _buildHeader(),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              if (_pinnedMessages.isNotEmpty) _buildPinnedBanner(),
-              if (_isBlocked) _buildBlockedBanner(),
-              if (!_canSend || _isAnnouncementsOnly) _buildAdminBanner(),
-              Expanded(
-                child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFF8B5CF6)))
-                    : _messages.isEmpty
-                        ? const _EmptyState()
-                        : _buildMessageList(),
-              ),
-              if (_otherUserTyping && !_isGroup && !_isBlocked)
-                _buildTypingIndicator(),
-              if (_replyingTo != null) _buildReplyBar(),
-              if (_multiSelectMode) _buildMultiSelectBar(),
-              if (_isRecording) _buildRecordingBar(),
-              if (_showEmojiPicker) _buildPickerPanel(),
-              _buildInputBar(),
-            ],
-          ),
-          if (_showScrollDown)
-            Positioned(
-              bottom: 90,
-              right: 16,
-              child: GestureDetector(
-                onTap: () {
-                  _scrollController.animateTo(
-                    _scrollController.position.maxScrollExtent,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-                },
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1a103c).withOpacity(0.95),
-                    shape: BoxShape.circle,
-                    border:
-                        Border.all(color: Colors.white.withOpacity(0.08)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.5),
-                        blurRadius: 20,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.keyboard_arrow_down,
-                      color: Colors.white, size: 22),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildHeader() {
-    final displayName = _otherUserNickname ?? _chatName ?? 'Chat';
-    final verified = _userCache[_otherUserId]?['is_verified'] == true;
-    String status;
-    Color statusColor;
-    if (_isGroup || _isChannel) {
-      status = 'Tap for info';
-      statusColor = const Color(0xFF06B6D4);
-    } else if (_isBlocked) {
-      status = _iBlockedThem ? 'You blocked this user' : 'Blocked';
-      statusColor = Colors.red.shade300;
-    } else if (_otherUserTyping) {
-      status = 'typing...';
-      statusColor = const Color(0xFF06B6D4);
-    } else if (_otherUserOnline) {
-      status = 'Online';
-      statusColor = const Color(0xFF22C55E);
-    } else if (_otherUserLastSeen != null) {
-      status = 'Last seen ${_timeAgo(_otherUserLastSeen!)}';
-      statusColor = Colors.white54;
-    } else {
-      status = 'Offline';
-      statusColor = Colors.white54;
-    }
-
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(66),
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-          child: Container(
-            padding:
-                const EdgeInsets.only(top: 8, bottom: 8, left: 10, right: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.03),
-              border: Border(
-                  bottom: BorderSide(color: Colors.white.withOpacity(0.06))),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Row(
-                children: [
-                  _headerCircle(
-                    icon: Icons.arrow_back,
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        if (_isGroup || _isChannel) {
-                          Navigator.pushNamed(context, '/group_info', arguments: {
-                            'chatId': _chatId,
-                            'chatName': _chatName,
-                            'chatAvatar': _chatAvatar,
-                            'isChannel': _isChannel,
-                          });
-                          return;
-                        }
-                        if (_otherUserId != null) {
-                          Navigator.pushNamed(
-                            context,
-                            '/public_profile',
-                            arguments: {
-                              'userId': _otherUserId,
-                              'username': displayName,
-                              'avatar_url': _chatAvatar,
-                            },
-                          );
-                        }
-                      },
-                      child: Container(
-                        height: 48,
-                        padding: const EdgeInsets.only(
-                            left: 4, right: 14, top: 4, bottom: 4),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SizedBox(
+            height: 24,
+            child: Row(
+              children: _recordingWave
+                  .map((h) => Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        width: 3,
+                        height: 4 + h * 18,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                              color: Colors.white.withOpacity(0.06)),
+                          color: Colors.red.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(2),
                         ),
-                        child: Row(
-                          children: [
-                            Stack(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Color(0xFF8B5CF6),
-                                        Color(0xFF06B6D4)
-                                      ],
-                                    ),
-                                  ),
-                                  child: _chatAvatar != null &&
-                                          _chatAvatar!.isNotEmpty
-                                      ? ClipOval(
-                                          child: CachedNetworkImage(
-                                            imageUrl: _chatAvatar!,
-                                            fit: BoxFit.cover,
-                                          ),
-                                        )
-                                      : Center(
-                                          child: Text(
-                                            displayName.isNotEmpty
-                                                ? displayName[0].toUpperCase()
-                                                : '?',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 15,
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                                if (_otherUserOnline && !_isGroup)
-                                  Positioned(
-                                    right: -1,
-                                    bottom: -1,
-                                    child: Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF22C55E),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                            color: const Color(0xFF0A0A0F),
-                                            width: 2),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      if (verified) ...[
-                                        const SizedBox(width: 4),
-                                        const Icon(
-                                          Icons.verified,
-                                          color: Color(0xFF1DA1F2),
-                                          size: 13,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  Text(
-                                    status,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: statusColor,
-                                      fontSize: 11,
-                                      fontWeight: _otherUserOnline ||
-                                              _otherUserTyping
-                                          ? FontWeight.w500
-                                          : FontWeight.w400,
-                                      fontStyle: _otherUserTyping
-                                          ? FontStyle.italic
-                                          : FontStyle.normal,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _headerCircle(
-                    icon: Icons.search,
-                    onTap: () => setState(() => _isSearching = true),
-                  ),
-                  const SizedBox(width: 6),
-                  _headerCircle(
-                    icon: Icons.videocam,
-                    onTap: () => _startCall(true),
-                  ),
-                  const SizedBox(width: 6),
-                  _headerCircle(
-                    icon: Icons.call,
-                    onTap: () => _startCall(false),
-                  ),
-                  const SizedBox(width: 6),
-                  _headerCircle(
-                    icon: Icons.more_vert,
-                    onTap: _showMoreMenu,
-                  ),
-                ],
-              ),
+                      ))
+                  .toList(),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _headerCircle({
-    required IconData icon,
-    required VoidCallback onTap,
-    Color? iconColor,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          shape: BoxShape.circle,
+        IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: _cancelRecording,
         ),
-        child: Icon(icon, color: iconColor ?? Colors.white70, size: 18),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildSearchAppBar() {
-    return AppBar(
-      backgroundColor: const Color(0xFF0A0A0F),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white70),
-        onPressed: () => setState(() {
-          _isSearching = false;
-          _searchResults.clear();
-          _searchController.clear();
-        }),
-      ),
-      title: TextField(
-        controller: _searchController,
-        autofocus: true,
-        style: const TextStyle(color: Colors.white),
-        decoration: const InputDecoration(
-          hintText: 'Search messages',
-          hintStyle: TextStyle(color: Colors.white30),
-          border: InputBorder.none,
+        IconButton(
+          icon: const Icon(Icons.send, color: Color(0xFF8B5CF6)),
+          onPressed: _stopRecordingAndSend,
         ),
-        onChanged: (q) {
-          final lower = q.toLowerCase();
-          setState(() {
-            _searchResults = _messages
-                .where((m) =>
-                    (m['text'] ?? '').toString().toLowerCase().contains(lower))
-                .toList();
-            _currentSearchIndex = _searchResults.isEmpty ? -1 : 0;
-          });
-        },
-      ),
-    );
-  }
+      ],
+    ),
+  );
+}
 
-  void _showMoreMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _glassSheet(
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+Widget _buildPickerPanel() {
+  return Container(
+    height: 320,
+    decoration: BoxDecoration(
+      color: const Color(0xFF1a103c).withOpacity(0.98),
+      border: Border(top: BorderSide(color: Colors.white.withOpacity(0.04))),
+    ),
+    child: Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Row(
             children: [
-              const SizedBox(height: 12),
-              if (!_isGroup && _otherUserId != null)
-                _sheetTile(Icons.person, 'View Profile', () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, '/public_profile', arguments: {
-                    'userId': _otherUserId,
-                    'username': _chatName,
-                    'avatar_url': _chatAvatar,
-                  });
-                }),
-              if (!_isGroup && _otherUserId != null)
-                _sheetTile(Icons.tag, 'Set Nickname', () {
-                  Navigator.pop(context);
-                  _openNicknameDialog();
-                }),
-              if (_isGroup || _isChannel)
-                _sheetTile(Icons.info_outline, 'Group Info', () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, '/group_info', arguments: {
-                    'chatId': _chatId,
-                    'chatName': _chatName,
-                    'chatAvatar': _chatAvatar,
-                    'isChannel': _isChannel,
-                  });
-                }),
-              _sheetTile(Icons.bookmark, 'Saved Messages', () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const _SavedMessagesScreen()),
-                );
-              }),
-              _sheetTile(Icons.image, 'Create Sticker', () {
-                Navigator.pop(context);
-                _createStickerFromGallery();
-              }),
-              _sheetTile(
-                _iBlockedThem ? Icons.lock_open : Icons.block,
-                _iBlockedThem ? 'Unblock Contact' : 'Block Contact',
-                () {
-                  Navigator.pop(context);
-                  if (_iBlockedThem) {
-                    _unblockUser();
-                  } else {
-                    _blockUser();
-                  }
-                },
-                color: Colors.red,
-              ),
-              _sheetTile(Icons.close, 'Cancel', () => Navigator.pop(context),
-                  color: Colors.white38),
+              _mainTab('emoji', Icons.emoji_emotions, 'Emoji'),
+              const SizedBox(width: 6),
+              _mainTab('sticker', Icons.auto_awesome, 'Stickers'),
+              const SizedBox(width: 6),
+              _mainTab('gif', Icons.gif_box, 'GIFs'),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildPinnedBanner() {
-    return GestureDetector(
-      onTap: () {
-        final first = _pinnedMessages.first;
-        final idx =
-            _messages.indexWhere((m) => m['id'] == first['message_id']);
-        if (idx >= 0 && _scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent - (idx * 80.0),
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeInOut,
-          );
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [
-            const Color(0xFF8B5CF6).withOpacity(0.15),
-            const Color(0xFF06B6D4).withOpacity(0.10),
-          ]),
-          border: Border(
-              bottom: BorderSide(
-                  color: const Color(0xFF8B5CF6).withOpacity(0.25))),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (int i = 0; i < _pinnedMessages.length; i++) ...[
-              if (i > 0) const Divider(color: Colors.white12, height: 10),
-              Builder(builder: (context) {
-                final p = _pinnedMessages[i];
-                final msg = _messages.firstWhere(
-                  (m) => m['id'] == p['message_id'],
-                  orElse: () => {},
-                );
-                return Row(
-                  children: [
-                    const Icon(Icons.push_pin,
-                        size: 12, color: Color(0xFF8B5CF6)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            (_userCache[msg['sender_id']]?['display_name'] ??
-                                    'Pinned')
-                                .toString(),
-                            style: const TextStyle(
-                                color: Color(0xFF8B5CF6),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            (msg['text'] ??
-                                    msg['media_type'] ??
-                                    'Message')
-                                .toString(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.75),
-                                fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 14, color: Colors.white38),
-                      onPressed: () => _unpinMessage(p['message_id']),
-                    ),
-                  ],
-                );
-              }),
+        const Divider(color: Colors.white10, height: 1),
+        Expanded(
+          child: IndexedStack(
+            index: _pickerTab == 'emoji'
+                ? 0
+                : _pickerTab == 'sticker'
+                    ? 1
+                    : 2,
+            children: [
+              _buildEmojiPanel(),
+              _buildStickerPanel(),
+              _buildGifPanel(),
             ],
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
+}
 
-  Widget _buildBlockedBanner() {
-    return GestureDetector(
+Widget _mainTab(String tab, IconData icon, String label) {
+  final active = _pickerTab == tab;
+  return Expanded(
+    child: GestureDetector(
       onTap: () {
-        if (_iBlockedThem) _unblockUser();
+        setState(() {
+          _pickerTab = tab;
+          _lastPanelMode = tab;
+        });
+        if (tab == 'gif' && !_gifsLoaded) _loadGifs();
       },
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-        color: Colors.red.withOpacity(0.1),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFF8B5CF6).withOpacity(0.12)
+              : Colors.transparent,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+          border: Border(
+            bottom: BorderSide(
+              color: active ? const Color(0xFF8B5CF6) : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.block, size: 14, color: Colors.red.shade300),
-            const SizedBox(width: 8),
+            Icon(icon,
+                size: 14, color: active ? Colors.white : Colors.white38),
+            const SizedBox(width: 6),
             Text(
-              _iBlockedThem
-                  ? 'You blocked this person. Tap to unblock.'
-                  : 'This user blocked you.',
-              style: TextStyle(color: Colors.red.shade300, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdminBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      color: Colors.orange.withOpacity(0.15),
-      child: Row(
-        children: [
-          const Icon(Icons.lock_outline, size: 14, color: Colors.orange),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _isAnnouncementsOnly
-                  ? 'Announcements only — only admins can send'
-                  : 'Chat disabled by admin',
-              style: const TextStyle(color: Colors.orange, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageList() {
-    final list = _messages.reversed.toList();
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      itemCount: list.length,
-      itemBuilder: (context, index) {
-        final m = list[index];
-        final prev = index > 0 ? list[index - 1] : null;
-        final showDate = _shouldShowDate(m, prev);
-        final isMine = m['sender_id'] == _currentUserId;
-        final selected = _selectedMessageIds.contains(m['id']);
-        return Column(
-          children: [
-            if (showDate) _dateDivider(m['created_at']),
-            _MessageBubble(
-              message: m,
-              isMine: isMine,
-              showAvatar: _isGroup && !isMine,
-              selected: selected,
-              multiSelect: _multiSelectMode,
-              userCache: _userCache,
-              onTap: () {
-                if (_multiSelectMode) {
-                  _toggleMultiSelect(m['id']);
-                } else if (m['view_once'] == true && m['media_url'] != null) {
-                  _openViewOnce(
-                    m['id'],
-                    m['media_url'],
-                    isVideo: m['media_type'] == 'video',
-                  );
-                } else if (m['media_type'] == 'image' &&
-                    m['media_url'] != null) {
-                  _openImageViewer(m['media_url']);
-                }
-              },
-              onLongPress: () {
-                if (!_multiSelectMode) _showMessageOptions(m);
-              },
-              onDoubleTap: () => _quickReact(m['id'], '❤️'),
-              onReply: () => _setReply(m),
-              playingAudioId: _currentlyPlayingAudioId,
-              audioPosition: _audioPosition,
-              audioDuration: _audioDuration,
-              onPlayAudio: (id, url) => _playVoice(id, url),
-              onOpenImage: _openImageViewer,
-              onOpenFile: _openFile,
-              onOpenLocation: _openLocationMap,
-              videoControllers: _videoControllers,
-              onVideoInit: () => setState(() {}),
-              onOpenProfile: (uid, name, avatar) {
-                Navigator.pushNamed(context, '/public_profile', arguments: {
-                  'userId': uid,
-                  'username': name,
-                  'avatar_url': avatar,
-                });
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  bool _shouldShowDate(Map<String, dynamic> m, Map<String, dynamic>? prev) {
-    if (prev == null) return true;
-    final a = _parseTs(m['created_at']);
-    final b = _parseTs(prev['created_at']);
-    if (a == null || b == null) return false;
-    return a.year != b.year || a.month != b.month || a.day != b.day;
-  }
-
-  DateTime? _parseTs(dynamic t) {
-    if (t == null) return null;
-    if (t is Timestamp) return t.toDate();
-    if (t is String) return DateTime.tryParse(t);
-    return null;
-  }
-
-  Widget _dateDivider(dynamic ts) {
-    final d = _parseTs(ts);
-    if (d == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            _formatDate(d),
-            style:
-                TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime d) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yest = today.subtract(const Duration(days: 1));
-    final md = DateTime(d.year, d.month, d.day);
-    if (md == today) return 'Today';
-    if (md == yest) return 'Yesterday';
-    return DateFormat('MMM d').format(d);
-  }
-
-  String _timeAgo(DateTime d) {
-    final diff = DateTime.now().difference(d);
-    if (diff.inSeconds < 60) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return DateFormat('MMM d, HH:mm').format(d);
-  }
-
-  Widget _buildTypingIndicator() {
-    final u = _otherUserId != null ? _userCache[_otherUserId] : null;
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, bottom: 6),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 12,
-            backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.3),
-            backgroundImage: u?['avatar_url'] != null
-                ? CachedNetworkImageProvider(u!['avatar_url'])
-                : null,
-            child: u?['avatar_url'] == null
-                ? Text(
-                    (u?['display_name'] ?? 'U').toString()[0].toUpperCase(),
-                    style: const TextStyle(fontSize: 10, color: Colors.white),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-                bottomLeft: Radius.circular(4),
+              label,
+              style: TextStyle(
+                color: active ? Colors.white : Colors.white38,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            child: Row(
-              children: [
-                for (var i = 0; i < 3; i++)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF8B5CF6),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildReplyBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a103c).withOpacity(0.9),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))),
+Widget _buildEmojiPanel() {
+  return Column(
+    children: [
+      SizedBox(
+        height: 36,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          children: _emojiCategories.entries.map((e) {
+            final active = e.key == _currentEmojiCategory;
+            return GestureDetector(
+              onTap: () => setState(() => _currentEmojiCategory = e.key),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active
+                      ? const Color(0xFF8B5CF6).withOpacity(0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(e.value['icon'] as String,
+                    style: const TextStyle(fontSize: 18)),
+              ),
+            );
+          }).toList(),
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFF8B5CF6),
-              borderRadius: BorderRadius.circular(2),
-            ),
+      Expanded(
+        child: GridView.builder(
+          padding: const EdgeInsets.all(10),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 8,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Replying to ${_replyingToSender ?? ''}',
-                    style: const TextStyle(
+          itemCount:
+              (_emojiCategories[_currentEmojiCategory]!['emojis'] as List)
+                  .length,
+          itemBuilder: (_, i) {
+            final e = (_emojiCategories[_currentEmojiCategory]!['emojis']
+                as List)[i];
+            return GestureDetector(
+              onTap: () {
+                _messageController.text += e as String;
+                _messageController.selection = TextSelection.collapsed(
+                    offset: _messageController.text.length);
+              },
+              child: Center(
+                child: Text(e as String,
+                    style: const TextStyle(fontSize: 22)),
+              ),
+            );
+          },
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildStickerPanel() {
+  return Column(
+    children: [
+      Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+        child: Row(
+          children: [
+            Text(
+              'My Stickers',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => _showStickerCreatorSheet(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 12, color: Color(0xFF8B5CF6)),
+                    SizedBox(width: 4),
+                    Text(
+                      'New',
+                      style: TextStyle(
                         color: Color(0xFF8B5CF6),
                         fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-                Text(
-                  _replyingToContent ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18, color: Colors.white54),
-            onPressed: () => setState(() {
-              _replyingTo = null;
-              _replyingToContent = null;
-              _replyingToSender = null;
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMultiSelectBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a103c).withOpacity(0.95),
-        border: Border(
-            top: BorderSide(color: const Color(0xFF8B5CF6).withOpacity(0.3))),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white54),
-            onPressed: _exitMultiSelect,
-          ),
-          Text('${_selectedMessageIds.length}',
-              style: const TextStyle(
-                  color: Color(0xFF8B5CF6),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700)),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.copy, color: Color(0xFF8B5CF6)),
-            onPressed: () {
-              final text = _messages
-                  .where((m) => _selectedMessageIds.contains(m['id']))
-                  .map((m) => (m['text'] ?? '').toString())
-                  .join('\n\n');
-              Clipboard.setData(ClipboardData(text: text));
-              _exitMultiSelect();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.share, color: Color(0xFF8B5CF6)),
-            onPressed: () async {
-              final selected = _messages
-                  .where((m) => _selectedMessageIds.contains(m['id']))
-                  .toList();
-              if (selected.isEmpty) return;
-              final snap = await FirebaseFirestore.instance
-                  .collection('chats')
-                  .where('participants', arrayContains: _currentUserId)
-                  .get();
-              if (!mounted) return;
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.transparent,
-                builder: (_) => _glassSheet(
-                  child: SafeArea(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: snap.docs.length,
-                      itemBuilder: (_, i) {
-                        final c = snap.docs[i];
-                        if (c.id == _chatId) return const SizedBox.shrink();
-                        final d = c.data();
-                        final name = d['name'] ?? d['title'] ?? 'Chat';
-                        return ListTile(
-                          title: Text(name.toString(),
-                              style:
-                                  const TextStyle(color: Colors.white)),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            for (final m in selected) {
-                              await _performForward(m, c.id);
-                            }
-                            _exitMultiSelect();
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: () async {
-              for (final id in _selectedMessageIds) {
-                await FirebaseFirestore.instance
-                    .collection('chats')
-                    .doc(_chatId)
-                    .collection('messages')
-                    .doc(id)
-                    .update({
-                  'deleted_for_everyone': true,
-                  'text': 'This message was deleted',
-                  'content': 'This message was deleted',
-                  'media_url': null,
-                });
-              }
-              _exitMultiSelect();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecordingBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.08),
-        border: Border(top: BorderSide(color: Colors.red.withOpacity(0.2))),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration:
-                const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            _fmtDuration(_recordingSeconds),
-            style: const TextStyle(
-                color: Colors.red, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 24,
-              child: Row(
-                children: _recordingWave
-                    .map((h) => Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
-                          width: 3,
-                          height: 4 + h * 18,
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ))
-                    .toList(),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: _cancelRecording,
-          ),
-          IconButton(
-            icon: const Icon(Icons.send, color: Color(0xFF8B5CF6)),
-            onPressed: _stopRecordingAndSend,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPickerPanel() {
-    return Container(
-      height: 320,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a103c).withOpacity(0.98),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.04))),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Row(
-              children: [
-                _mainTab('emoji', Icons.emoji_emotions, 'Emoji'),
-                const SizedBox(width: 6),
-                _mainTab('sticker', Icons.auto_awesome, 'Stickers'),
-                const SizedBox(width: 6),
-                _mainTab('gif', Icons.gif_box, 'GIFs'),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white10, height: 1),
-          Expanded(
-            child: IndexedStack(
-              index: _pickerTab == 'emoji'
-                  ? 0
-                  : _pickerTab == 'sticker'
-                      ? 1
-                      : 2,
-              children: [
-                _buildEmojiPanel(),
-                _buildStickerPanel(),
-                _buildGifPanel(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _mainTab(String tab, IconData icon, String label) {
-    final active = _pickerTab == tab;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _pickerTab = tab;
-            _lastPanelMode = tab;
-          });
-          if (tab == 'gif' && !_gifsLoaded) _loadGifs();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: active
-                ? const Color(0xFF8B5CF6).withOpacity(0.12)
-                : Colors.transparent,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-            border: Border(
-              bottom: BorderSide(
-                color: active ? const Color(0xFF8B5CF6) : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon,
-                  size: 14, color: active ? Colors.white : Colors.white38),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? Colors.white : Colors.white38,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmojiPanel() {
-    return Column(
-      children: [
-        SizedBox(
-          height: 36,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            children: _emojiCategories.entries.map((e) {
-              final active = e.key == _currentEmojiCategory;
-              return GestureDetector(
-                onTap: () => setState(() => _currentEmojiCategory = e.key),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: active
-                        ? const Color(0xFF8B5CF6).withOpacity(0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(e.value['icon'] as String,
-                      style: const TextStyle(fontSize: 18)),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(10),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 8,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
-            ),
-            itemCount:
-                (_emojiCategories[_currentEmojiCategory]!['emojis'] as List)
-                    .length,
-            itemBuilder: (_, i) {
-              final e = (_emojiCategories[_currentEmojiCategory]!['emojis']
-                  as List)[i];
-              return GestureDetector(
-                onTap: () {
-                  _messageController.text += e as String;
-                  _messageController.selection = TextSelection.collapsed(
-                      offset: _messageController.text.length);
-                },
-                child: Center(
-                  child: Text(e as String,
-                      style: const TextStyle(fontSize: 22)),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStickerPanel() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Row(
-            children: [
-              Text(
-                'My Stickers',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () => _showStickerCreatorSheet(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 12, color: Color(0xFF8B5CF6)),
-                      SizedBox(width: 4),
-                      Text(
-                        'New',
-                        style: TextStyle(
-                          color: Color(0xFF8B5CF6),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        SizedBox(
-          height: 34,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            children: [
-              _stickerPackTab('fav', '⭐ Fav'),
-              for (final p in _stickerPacks)
-                _stickerPackTab(p['id'], (p['name'] ?? 'Pack').toString()),
-            ],
-          ),
+      ),
+      SizedBox(
+        height: 34,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          children: [
+            _stickerPackTab('fav', '⭐ Fav'),
+            for (final p in _stickerPacks)
+              _stickerPackTab(p['id'], (p['name'] ?? 'Pack').toString()),
+          ],
         ),
-        const SizedBox(height: 4),
-        Expanded(
-          child: _loadingStickers
-              ? const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(0xFF8B5CF6), strokeWidth: 2))
-              : _currentStickerPackId == 'fav' && _favoriteStickers.isEmpty
-                  ? _stickerEmpty(
-                      'No favorites yet — long-press any of your stickers to add one')
-                  : _currentStickerPackId != 'fav' &&
-                          _stickersInCurrentPack().isEmpty
-                      ? _stickerEmpty('This pack is empty')
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(10),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            mainAxisSpacing: 8,
-                            crossAxisSpacing: 8,
-                          ),
-                          itemCount: _stickersInCurrentPack().length,
-                          itemBuilder: (_, i) {
-                            final s = _stickersInCurrentPack()[i];
-                            return GestureDetector(
-                              onTap: () => _sendSticker(s),
-                              onLongPress: () => _showStickerOptions(s, true),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.04),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(6),
-                                  child: s['sticker_type'] == 'video'
-                                      ? ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          child: _StickerVideoPreview(
-                                              url: s['url'] as String),
-                                        )
-                                      : CachedNetworkImage(
-                                          imageUrl: s['url'] as String,
-                                          fit: BoxFit.contain,
-                                          memCacheWidth: 200,
-                                        ),
-                                ),
-                              ),
-                            );
-                          },
+      ),
+      const SizedBox(height: 4),
+      Expanded(
+        child: _loadingStickers
+            ? const Center(
+                child: CircularProgressIndicator(
+                    color: Color(0xFF8B5CF6), strokeWidth: 2))
+            : _currentStickerPackId == 'fav' && _favoriteStickers.isEmpty
+                ? _stickerEmpty(
+                    'No favorites yet — long-press any of your stickers to add one')
+                : _currentStickerPackId != 'fav' &&
+                        _stickersInCurrentPack().isEmpty
+                    ? _stickerEmpty('This pack is empty')
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(10),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
                         ),
-        ),
-      ],
-    );
-  }
-
-  Widget _stickerPackTab(String id, String label) {
+                        itemCount: _stickersInCurrentPack().length,
+                        itemBuilder: (_, i) {
+                          final s = _stickersInCurrentPack()[i];
+                          return GestureDetector(
+                            onTap: () => _sendSticker(s),
+                            onLongPress: () => _showStickerOptions(s, true),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.04),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: s['sticker_type'] == 'video'
+                                    ? ClipRRect(
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                        child: _StickerVideoPreview(
+                                            url: s['url'] as String),
+                                      )
+                                    : CachedNetworkImage(
+                                        imageUrl: s['url'] as String,
+                                        fit: BoxFit.contain,
+                                        memCacheWidth: 200,
+                                      ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+      ),
+    ],
+  );
+}
+    Widget _stickerPackTab(String id, String label) {
     final active = _currentStickerPackId == id;
     return GestureDetector(
       onTap: () => setState(() => _currentStickerPackId = id),
@@ -3829,27 +3829,53 @@ class _ChatScreenState extends State<ChatScreen>
               ),
             ),
             const SizedBox(width: 6),
-            GestureDetector(
-              onTap: hasText ? _sendTextMessage : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: hasText
-                      ? const LinearGradient(
-                          colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)])
-                      : null,
-                  color: hasText ? null : Colors.white.withOpacity(0.06),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.send,
-                  size: 18,
-                  color: hasText ? Colors.white : Colors.white38,
-                ),
-              ),
-            ),
+            _isRecording
+                ? GestureDetector(
+                    onTap: _stopRecordingAndSend,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.stop,
+                          size: 18, color: Colors.white),
+                    ),
+                  )
+                : hasText
+                    ? GestureDetector(
+                        onTap: _sendTextMessage,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              Color(0xFF8B5CF6),
+                              Color(0xFF06B6D4),
+                            ]),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.send,
+                              size: 18, color: Colors.white),
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: _startRecording,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              Color(0xFF8B5CF6),
+                              Color(0xFF06B6D4),
+                            ]),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.mic,
+                              size: 18, color: Colors.white),
+                        ),
+                      ),
           ],
         ),
       ),
@@ -4012,10 +4038,6 @@ class _ChatScreenState extends State<ChatScreen>
             borderSide: BorderSide.none),
       );
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// SAVED MESSAGES SCREEN
-// ═══════════════════════════════════════════════════════════════════════
 class _SavedMessagesScreen extends StatelessWidget {
   const _SavedMessagesScreen();
 
@@ -4155,9 +4177,6 @@ class _SavedMessagesScreen extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// EMPTY STATE
-// ═══════════════════════════════════════════════════════════════════════
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
@@ -4178,9 +4197,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// STICKER VIDEO PREVIEW
-// ═══════════════════════════════════════════════════════════════════════
 class _StickerVideoPreview extends StatefulWidget {
   final String url;
   const _StickerVideoPreview({required this.url});
@@ -4230,9 +4246,6 @@ class _StickerVideoPreviewState extends State<_StickerVideoPreview> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// INVITE / SLUG DETECTORS
-// ═══════════════════════════════════════════════════════════════════════
 class _InviteLinkDetector {
   static final _re = RegExp(
     r'https?://([a-z0-9-]+\.web\.app)/join/([A-Za-z0-9_-]{2,60})',
@@ -4520,7 +4533,6 @@ class _InviteCardState extends State<_InviteCard> {
     );
   }
 }
-
 class _SlugCard extends StatefulWidget {
   final String slug;
   final VoidCallback onMessage;
@@ -4840,9 +4852,6 @@ class _SlugCardState extends State<_SlugCard> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// LINK PREVIEW BUBBLE
-// ═══════════════════════════════════════════════════════════════════════
 class _LinkPreviewBubble extends StatelessWidget {
   final Map<String, dynamic> preview;
   final VoidCallback onTap;
@@ -4924,9 +4933,6 @@ class _LinkPreviewBubble extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// VIEW-ONCE VIEWER
-// ═══════════════════════════════════════════════════════════════════════
 class _ViewOnceViewer extends StatefulWidget {
   final String url;
   final bool isVideo;
@@ -5030,9 +5036,6 @@ class _ViewOnceViewerState extends State<_ViewOnceViewer> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// EFFECT BURSTS
-// ═══════════════════════════════════════════════════════════════════════
 class _EffectBurst {
   static const _styleMap = <String, String>{
     '🎉': 'confetti',
@@ -5179,9 +5182,6 @@ class _Particle {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// EMOJI-ONLY ANIMATION
-// ═══════════════════════════════════════════════════════════════════════
 class _EmojiOnly extends StatefulWidget {
   final String emoji;
   const _EmojiOnly({required this.emoji});
@@ -5220,10 +5220,6 @@ class _EmojiOnlyState extends State<_EmojiOnly>
     );
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// MESSAGE BUBBLE
-// ═══════════════════════════════════════════════════════════════════════
 class _MessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
   final bool isMine;
@@ -6111,14 +6107,15 @@ class _MessageBubbleState extends State<_MessageBubble> {
 
   bool _isSingleEmoji(String s) {
     final t = s.trim();
+    if (t.isEmpty) return false;
+    if (t.contains(' ') || t.contains('\n') || t.contains('\t')) return false;
     final runes = t.runes.toList();
-    if (runes.length == 1) return true;
-    if (runes.length <= 4 && runes.isNotEmpty) {
-      final c = runes.first;
-      return (c >= 0x1F300 && c <= 0x1FAFF) ||
-          (c >= 0x2600 && c <= 0x27BF);
-    }
-    return false;
+    if (runes.isEmpty) return false;
+    if (runes.length > 4) return false;
+    final c = runes.first;
+    return (c >= 0x1F300 && c <= 0x1FAFF) ||
+        (c >= 0x2600 && c <= 0x27BF) ||
+        (c >= 0x1F1E6 && c <= 0x1F1FF);
   }
 
   String _fmtTime(dynamic ts) {
@@ -6140,10 +6137,6 @@ class _MessageBubbleState extends State<_MessageBubble> {
     return null;
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// LINKIFY
-// ═══════════════════════════════════════════════════════════════════════
 class _Linkify {
   static final _codeBlockR = RegExp(r'```([^`]+)```');
   static final _inlineCodeR = RegExp(r'`([^`]+)`');
@@ -6323,9 +6316,6 @@ class _SpoilerSpanState extends State<_SpoilerSpan> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// MEDIA EDITOR SCREEN
-// ═══════════════════════════════════════════════════════════════════════
 class _EditorResult {
   final File file;
   const _EditorResult(this.file);
@@ -6413,25 +6403,25 @@ class _MediaEditorScreenState extends State<_MediaEditorScreen> {
   }
 
   Future<void> _export() async {
-  if (_mode == 'photo') {
-    final boundary = _canvasKey.currentContext!.findRenderObject()
-        as RenderRepaintBoundary;
-    final image = await boundary.toImage(pixelRatio: 2.0);
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    if (data == null) return;
-    final out = File(
-        '${(await getTemporaryDirectory()).path}/edit_${const Uuid().v4()}.png');
-    await out.writeAsBytes(data.buffer.asUint8List());
+    if (_mode == 'photo') {
+      final boundary = _canvasKey.currentContext!.findRenderObject()
+          as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 2.0);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) return;
+      final out = File(
+          '${(await getTemporaryDirectory()).path}/edit_${const Uuid().v4()}.png');
+      await out.writeAsBytes(data.buffer.asUint8List());
+      if (!mounted) return;
+      Navigator.pop(context, _EditorResult(out));
+      return;
+    }
+
+    // Video: return original (no trim)
     if (!mounted) return;
-    Navigator.pop(context, _EditorResult(out));
+    Navigator.pop(context, _EditorResult(widget.initialFile));
     return;
   }
-
-  // Video — return original (no trim)
-  if (!mounted) return;
-  Navigator.pop(context, _EditorResult(widget.initialFile));
-  return;
-}
 
   @override
   Widget build(BuildContext context) {
