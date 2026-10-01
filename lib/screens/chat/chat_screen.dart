@@ -27,6 +27,7 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart' show AuraAuthProvider;
+import '../../providers/settings_provider.dart';
 import '../../services/cloudinary_service.dart';
 import '../../services/call_service.dart';
 import '../../services/invitation_service.dart';
@@ -82,6 +83,12 @@ class _ChatScreenState extends State<ChatScreen>
   DateTime? _otherUserLastSeen;
   bool _otherUserTyping = false;
   Timer? _otherTypingHideTimer;
+  
+// Other user's privacy settings
+  bool _otherProfilePhotoVisible = true;
+  bool _otherLastSeenVisible = true;
+  bool _otherVoiceVideoCallsVisible = true;
+  StreamSubscription? _otherSettingsSubscription;
 
   List<Map<String, dynamic>> _messages = [];
   StreamSubscription? _messageSubscription;
@@ -337,8 +344,29 @@ Future<void> _initDirectFeatures() async {
   await _checkBlockStatus();
   _subscribeBlockStatus();
   _subscribeOtherUserStatus();
+  _subscribeOtherUserSettings();
   _subscribeTyping();
   _loadNickname();
+}
+
+// Listen to the other user's privacy settings
+void _subscribeOtherUserSettings() {
+  if (_otherUserId == null) return;
+  _otherSettingsSubscription?.cancel();
+  _otherSettingsSubscription = FirebaseFirestore.instance
+      .collection('user_settings')
+      .doc(_otherUserId)
+      .snapshots()
+      .listen((doc) {
+    if (!mounted) return;
+    final d = doc.data() ?? {};
+    setState(() {
+      _otherProfilePhotoVisible = d['profile_photo_visible'] as bool? ?? true;
+      _otherLastSeenVisible = d['last_seen_visible'] as bool? ?? true;
+      _otherVoiceVideoCallsVisible =
+          d['voice_video_calls_visible'] as bool? ?? true;
+    });
+  });
 }
 
 Future<void> _loadNickname() async {
@@ -2466,10 +2494,10 @@ PreferredSizeWidget _buildHeader() {
   } else if (_otherUserTyping) {
     status = 'typing...';
     statusColor = const Color(0xFF06B6D4);
-  } else if (_otherUserOnline) {
+  } else if (_otherUserOnline && _otherLastSeenVisible) {
     status = 'Online';
     statusColor = const Color(0xFF22C55E);
-  } else if (_otherUserLastSeen != null) {
+  } else if (_otherUserLastSeen != null && _otherLastSeenVisible) {
     status = 'Last seen ${_timeAgo(_otherUserLastSeen!)}';
     statusColor = Colors.white54;
   } else {
@@ -2550,8 +2578,11 @@ PreferredSizeWidget _buildHeader() {
                                     ],
                                   ),
                                 ),
-                                child: _chatAvatar != null &&
-                                        _chatAvatar!.isNotEmpty
+                                child: (_chatAvatar != null &&
+                                       _chatAvatar!.isNotEmpty &&
+                                       (_isGroup ||
+                                           _isChannel ||
+                                          _otherProfilePhotoVisible))
                                     ? ClipOval(
                                         child: CachedNetworkImage(
                                           imageUrl: _chatAvatar!,
@@ -2571,7 +2602,7 @@ PreferredSizeWidget _buildHeader() {
                                         ),
                                       ),
                               ),
-                              if (_otherUserOnline && !_isGroup)
+                              if (_otherUserOnline && !_isGroup && _otherLastSeenVisible)
                                 Positioned(
                                   right: -1,
                                   bottom: -1,
