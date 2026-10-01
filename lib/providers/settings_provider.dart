@@ -50,38 +50,31 @@ class SettingsProvider extends ChangeNotifier {
   bool _saveToGallery = true;
 
   // =========================================================================
-  // APP LOCK TRACKING — FIXED: Robust timer-based locking
+  // APP LOCK TRACKING
   // =========================================================================
   DateTime? _lastBackgroundTime;
   bool _isLocked = false;
-  Timer? _foregroundTimer; // FIXED: Periodic timer to save background time
+  Timer? _foregroundTimer;
 
   bool get isLocked => _isLocked;
 
-  /// FIXED: Start a periodic timer that saves the current time every 30 seconds
-  /// while the app is in foreground. This ensures that even if the app is killed
-  /// without onAppBackground() firing, we have a recent timestamp to compare.
   void startForegroundTimer() {
     _foregroundTimer?.cancel();
     _foregroundTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       final prefs = await _prefs;
       await prefs.setInt('last_foreground_time', DateTime.now().millisecondsSinceEpoch);
     });
-    // Save immediately on start
     _prefs.then((prefs) => prefs.setInt('last_foreground_time', DateTime.now().millisecondsSinceEpoch));
   }
 
-  /// FIXED: Stop the foreground timer when app goes to background
   void stopForegroundTimer() {
     _foregroundTimer?.cancel();
     _foregroundTimer = null;
   }
 
-  /// Call this when app goes to background (paused/detached)
   Future<void> onAppBackground() async {
     stopForegroundTimer();
 
-    // Only track if lock is actually configured
     if (!_appPasscode && !_biometricLock) return;
 
     final now = DateTime.now();
@@ -90,23 +83,17 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setInt('last_background_time', now.millisecondsSinceEpoch);
     await prefs.setBool('has_ever_backgrounded', true);
 
-    // FIXED: If app is already locked, persist that state
     if (_isLocked) {
       await prefs.setBool('app_is_locked', true);
     }
   }
 
-  /// Call this when app resumes — returns true if lock screen should show
   Future<bool> shouldShowLockScreen() async {
-    // No lock configured
     if (!_appPasscode && !_biometricLock) return false;
-
-    // Already locked (e.g. manually locked or persisted from previous session)
     if (_isLocked) return true;
 
     final prefs = await _prefs;
 
-    // FIXED: Check if app was locked before being killed
     final wasLocked = prefs.getBool('app_is_locked') ?? false;
     if (wasLocked) {
       _isLocked = true;
@@ -116,39 +103,30 @@ class SettingsProvider extends ChangeNotifier {
 
     final lastBg = prefs.getInt('last_background_time');
     final lastFg = prefs.getInt('last_foreground_time');
-
-    // Use the most recent timestamp we have (background time preferred, fallback to foreground time)
     final lastKnownTime = lastBg ?? lastFg;
 
-    if (lastKnownTime == null) {
-      // No time recorded at all — this is first launch or app was never properly backgrounded
-      // Don't lock on first open
-      return false;
-    }
+    if (lastKnownTime == null) return false;
 
     final lastTime = DateTime.fromMillisecondsSinceEpoch(lastKnownTime);
     final now = DateTime.now();
     final diffMinutes = now.difference(lastTime).inMinutes;
 
-    debugPrint('App lock check: last known time = $lastTime, now = $now, diff = $diffMinutes min, timeout = $_autoLockTimeout min');
+    debugPrint('App lock check: last = $lastTime, now = $now, diff = $diffMinutes min, timeout = $_autoLockTimeout min');
 
     if (diffMinutes >= _autoLockTimeout) {
       _isLocked = true;
       await prefs.setBool('app_is_locked', true);
-      // FIXED: Clear the timestamps so next open doesn't re-lock immediately
       await prefs.remove('last_background_time');
       await prefs.remove('last_foreground_time');
       notifyListeners();
       return true;
     }
 
-    // Timeout not reached — clear background time, stay unlocked
     await prefs.remove('last_background_time');
     _lastBackgroundTime = null;
     return false;
   }
 
-  /// Call this after successful unlock (biometric or passcode)
   Future<void> unlock() async {
     _isLocked = false;
     final prefs = await _prefs;
@@ -158,7 +136,6 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// For manual lock trigger
   Future<void> lock() async {
     _isLocked = true;
     final prefs = await _prefs;
@@ -175,8 +152,6 @@ class SettingsProvider extends ChangeNotifier {
   bool get biometricLock => _biometricLock;
   String get passcode => _passcode;
   int get autoLockTimeout => _autoLockTimeout;
-
-  // Alias for appPasscode (used by lock screen)
   bool get passcodeLock => _appPasscode;
 
   bool get messageTones => _messageTones;
@@ -187,7 +162,6 @@ class SettingsProvider extends ChangeNotifier {
   bool get inAppVibrate => _inAppVibrate;
   bool get showPreview => _showPreview;
 
-  // Call Ringtone Getter
   String get callRingtone => _callRingtone;
 
   bool get phoneNumberVisible => _phoneNumberVisible;
@@ -213,17 +187,14 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> _loadSettings() async {
     final prefs = await _prefs;
 
-    // Security
     _twoStepVerification = prefs.getBool('two_step_verification') ?? false;
     _appPasscode = prefs.getBool('app_passcode') ?? false;
     _biometricLock = prefs.getBool('biometric_lock') ?? false;
     _passcode = prefs.getString('passcode') ?? '';
     _autoLockTimeout = prefs.getInt('auto_lock_timeout') ?? 5;
 
-    // FIXED: Load persisted lock state on app start
     _isLocked = prefs.getBool('app_is_locked') ?? false;
 
-    // Notifications
     _messageTones = prefs.getBool('message_tones') ?? true;
     _groupNotifications = prefs.getBool('group_notifications') ?? true;
     _channelNotifications = prefs.getBool('channel_notifications') ?? true;
@@ -232,10 +203,8 @@ class SettingsProvider extends ChangeNotifier {
     _inAppVibrate = prefs.getBool('in_app_vibrate') ?? true;
     _showPreview = prefs.getBool('show_preview') ?? true;
 
-    // Load Call Ringtone
     _callRingtone = prefs.getString('call_ringtone') ?? 'default';
 
-    // Privacy
     _phoneNumberVisible = prefs.getBool('phone_number_visible') ?? true;
     _lastSeenVisible = prefs.getBool('last_seen_visible') ?? true;
     _profilePhotoVisible = prefs.getBool('profile_photo_visible') ?? true;
@@ -245,21 +214,17 @@ class SettingsProvider extends ChangeNotifier {
     _findByPhone = prefs.getBool('find_by_phone') ?? true;
     _findByUsername = prefs.getBool('find_by_username') ?? true;
 
-    // Theme
     final themeString = prefs.getString('theme_mode') ?? 'dark';
-    _themeMode = themeString == 'light' ? ThemeMode.light : 
+    _themeMode = themeString == 'light' ? ThemeMode.light :
                  themeString == 'system' ? ThemeMode.system : ThemeMode.dark;
 
-    // Language
     _language = prefs.getString('language') ?? 'en';
 
-    // Data
     _autoDownloadMedia = prefs.getBool('auto_download_media') ?? true;
     _autoDownloadDocuments = prefs.getBool('auto_download_documents') ?? false;
     _saveToGallery = prefs.getBool('save_to_gallery') ?? true;
 
     notifyListeners();
-
     _syncFromFirebase();
   }
 
@@ -278,13 +243,12 @@ class SettingsProvider extends ChangeNotifier {
 
       if (doc.exists) {
         final data = doc.data()!;
-        // Security
         _twoStepVerification = data['two_step_verification'] ?? _twoStepVerification;
         _appPasscode = data['app_passcode'] ?? _appPasscode;
         _biometricLock = data['biometric_lock'] ?? _biometricLock;
         _passcode = data['passcode'] ?? _passcode;
         _autoLockTimeout = data['auto_lock_timeout'] ?? _autoLockTimeout;
-        // Notifications
+
         _messageTones = data['message_tones'] ?? _messageTones;
         _groupNotifications = data['group_notifications'] ?? _groupNotifications;
         _channelNotifications = data['channel_notifications'] ?? _channelNotifications;
@@ -292,9 +256,9 @@ class SettingsProvider extends ChangeNotifier {
         _inAppSounds = data['in_app_sounds'] ?? _inAppSounds;
         _inAppVibrate = data['in_app_vibrate'] ?? _inAppVibrate;
         _showPreview = data['show_preview'] ?? _showPreview;
-        // Sync Call Ringtone from Firebase
+
         _callRingtone = data['call_ringtone'] ?? _callRingtone;
-        // Privacy
+
         _phoneNumberVisible = data['phone_number_visible'] ?? _phoneNumberVisible;
         _lastSeenVisible = data['last_seen_visible'] ?? _lastSeenVisible;
         _profilePhotoVisible = data['profile_photo_visible'] ?? _profilePhotoVisible;
@@ -303,16 +267,17 @@ class SettingsProvider extends ChangeNotifier {
         _voiceVideoCallsVisible = data['voice_video_calls_visible'] ?? _voiceVideoCallsVisible;
         _findByPhone = data['find_by_phone'] ?? _findByPhone;
         _findByUsername = data['find_by_username'] ?? _findByUsername;
-        // Theme
+
         final themeString = data['theme_mode'] ?? 'dark';
-        _themeMode = themeString == 'light' ? ThemeMode.light : 
+        _themeMode = themeString == 'light' ? ThemeMode.light :
                      themeString == 'system' ? ThemeMode.system : ThemeMode.dark;
-        // Language
+
         _language = data['language'] ?? _language;
-        // Data
+
         _autoDownloadMedia = data['auto_download_media'] ?? _autoDownloadMedia;
         _autoDownloadDocuments = data['auto_download_documents'] ?? _autoDownloadDocuments;
         _saveToGallery = data['save_to_gallery'] ?? _saveToGallery;
+
         notifyListeners();
       }
     } catch (e) {
@@ -331,6 +296,7 @@ class SettingsProvider extends ChangeNotifier {
         'two_step_verification': _twoStepVerification,
         'app_passcode': _appPasscode,
         'biometric_lock': _biometricLock,
+        'passcode': _passcode,                        // ← FIXED: was missing
         'auto_lock_timeout': _autoLockTimeout,
         // Privacy
         'phone_number_visible': _phoneNumberVisible,
@@ -563,11 +529,55 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Reset all settings
+  // Reset all settings — FIXED: wipes Firestore too so nothing pulls back
   Future<void> resetSettings() async {
     final prefs = await _prefs;
     await prefs.clear();
-    await _loadSettings();
+
+    // Wipe Firestore so _syncFromFirebase() can't pull old values back
+    try {
+      final userId = _auth.currentUser?.uid ?? _mockUserId;
+      if (userId != null) {
+        await _firestore.collection('user_settings').doc(userId).delete();
+      }
+    } catch (e) {
+      debugPrint('Reset Firestore error: $e');
+    }
+
+    // Reset in-memory to defaults (do NOT call _loadSettings — it would re-sync from Firestore)
+    _twoStepVerification = false;
+    _appPasscode = false;
+    _biometricLock = false;
+    _passcode = '';
+    _autoLockTimeout = 5;
+    _isLocked = false;
+
+    _messageTones = true;
+    _groupNotifications = true;
+    _channelNotifications = true;
+    _voiceVideoCalls = true;
+    _inAppSounds = true;
+    _inAppVibrate = true;
+    _showPreview = true;
+    _callRingtone = 'default';
+
+    _phoneNumberVisible = true;
+    _lastSeenVisible = true;
+    _profilePhotoVisible = true;
+    _forwardedMessages = true;
+    _addToGroups = true;
+    _voiceVideoCallsVisible = true;
+    _findByPhone = true;
+    _findByUsername = true;
+
+    _themeMode = ThemeMode.dark;
+    _language = 'en';
+
+    _autoDownloadMedia = true;
+    _autoDownloadDocuments = false;
+    _saveToGallery = true;
+
+    notifyListeners();
   }
 
   @override
