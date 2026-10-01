@@ -69,197 +69,268 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               builder: (context, userSnapshot) {
                 final liveData = userSnapshot.data?.data() as Map<String, dynamic>?;
 
-                // FIX: Properly extract name fields from Firestore
-                // Priority: display_name > name > username > 'Unknown'
-                // Phone number is NEVER used as the display name
                 final displayName = liveData?['display_name'] as String? ??
                                    liveData?['name'] as String? ??
                                    liveData?['username'] as String? ??
                                    'Unknown';
 
                 final userUsername = liveData?['username'] as String?;
-                final avatarUrl = liveData?['avatar_url'] as String? ?? passedAvatarUrl;
+                final rawAvatarUrl = liveData?['avatar_url'] as String? ?? passedAvatarUrl;
                 final email = liveData?['email'] as String?;
                 final bio = liveData?['bio'] as String? ?? args?['bio'] as String?;
 
+                // 🔽 NEW: watch the other user's privacy settings
                 return StreamBuilder<DocumentSnapshot>(
                   stream: FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(currentUserId)
+                      .collection('user_settings')
+                      .doc(userId)
                       .snapshots(),
-                  builder: (context, currentUserSnapshot) {
-                    final currentUserData = currentUserSnapshot.data?.data() as Map<String, dynamic>?;
-                    final blockedList = List<String>.from(currentUserData?['blocked_users'] ?? []);
-                    final contactsList = List<String>.from(currentUserData?['contacts'] ?? []);
-                    final isBlocked = blockedList.contains(userId);
-                    final isContact = contactsList.contains(userId);
+                  builder: (context, settingsSnapshot) {
+                    final settingsData =
+                        settingsSnapshot.data?.data() as Map<String, dynamic>?;
 
-                    return SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 32),
+                    // Default to visible if no settings doc exists yet
+                    final profilePhotoVisible =
+                        settingsData?['profile_photo_visible'] as bool? ?? true;
+                    final phoneNumberVisible =
+                        settingsData?['phone_number_visible'] as bool? ?? true;
+                    final lastSeenVisible =
+                        settingsData?['last_seen_visible'] as bool? ?? true;
+                    final voiceVideoCallsVisible =
+                        settingsData?['voice_video_calls_visible'] as bool? ?? true;
 
-                          // Profile Avatar
-                          Center(child: _buildAvatar(avatarUrl, displayName)),
+                    // Hide avatar if the other user chose to hide it
+                    final avatarUrl = profilePhotoVisible ? rawAvatarUrl : null;
 
-                          const SizedBox(height: 24),
+                    // Hide phone number unless they allow it
+                    final phoneNumber =
+                        phoneNumberVisible ? liveData?['phone_number'] as String? : null;
 
-                          // FIX: Display Name with verified badge (uses phone number check)
-                          VerifiedUsername(
-                            username: displayName,
-                            email: email,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                            badgeSize: 18,
-                            spacing: 8,
-                          ),
+                    // Last seen (if you render it anywhere, gate it here)
+                    final lastSeen = lastSeenVisible
+                        ? liveData?['last_seen'] as Timestamp?
+                        : null;
 
-                          const SizedBox(height: 4),
+                    return StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(currentUserId)
+                          .snapshots(),
+                      builder: (context, currentUserSnapshot) {
+                        final currentUserData =
+                            currentUserSnapshot.data?.data() as Map<String, dynamic>?;
+                        final blockedList =
+                            List<String>.from(currentUserData?['blocked_users'] ?? []);
+                        final contactsList =
+                            List<String>.from(currentUserData?['contacts'] ?? []);
+                        final isBlocked = blockedList.contains(userId);
+                        final isContact = contactsList.contains(userId);
 
-                          // Username with @ prefix (if exists)
-                          if (userUsername != null && userUsername.isNotEmpty)
-                            Text(
-                              '@$userUsername',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.white.withOpacity(0.5),
-                              ),
-                            ),
+                        return SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 32),
 
-                          const SizedBox(height: 8),
+                              // Profile Avatar (respects profilePhotoVisible)
+                              Center(child: _buildAvatar(avatarUrl, displayName)),
 
-                          const SizedBox(height: 16),
+                              const SizedBox(height: 24),
 
-                          // Bio
-                          if (bio != null && bio.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 32),
-                              child: Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.08),
-                                  ),
+                              // Display Name
+                              VerifiedUsername(
+                                username: displayName,
+                                email: email,
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
-                                child: Text(
-                                  bio,
-                                  textAlign: TextAlign.center,
+                                badgeSize: 18,
+                                spacing: 8,
+                              ),
+
+                              const SizedBox(height: 4),
+
+                              if (userUsername != null && userUsername.isNotEmpty)
+                                Text(
+                                  '@$userUsername',
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.7),
-                                    fontSize: 15,
-                                    height: 1.5,
+                                    fontSize: 16,
+                                    color: Colors.white.withOpacity(0.5),
                                   ),
+                                ),
+
+                              const SizedBox(height: 8),
+
+                              // Phone number (only if visible)
+                              if (phoneNumber != null && phoneNumber.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    phoneNumber,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.white.withOpacity(0.4),
+                                    ),
+                                  ),
+                                ),
+
+                              // Last seen (only if visible)
+                              if (lastSeen != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'Last seen ${_formatLastSeen(lastSeen.toDate())}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white.withOpacity(0.35),
+                                    ),
+                                  ),
+                                ),
+
+                              const SizedBox(height: 16),
+
+                              // Bio
+                              if (bio != null && bio.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.05),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.08),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      bio,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.7),
+                                        fontSize: 15,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                              const SizedBox(height: 32),
+
+                              // Action Buttons Row
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 32),
+                                child: Row(
+                                  children: [
+                                    // Message Button
+                                    Expanded(
+                                      child: _buildActionButton(
+                                        icon: Icons.message,
+                                        label: 'Message',
+                                        gradient: const [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
+                                        onTap: isBlocked
+                                            ? () {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('Unblock user to send messages'),
+                                                    backgroundColor: Colors.orange,
+                                                  ),
+                                                );
+                                              }
+                                            : () async {
+                                                final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+                                                final chat = await chatProvider.startDirectChat(userId);
+                                                if (chat != null && mounted) {
+                                                  Navigator.pushNamed(
+                                                    context,
+                                                    '/chat',
+                                                    arguments: {
+                                                      'chatId': chat['id'],
+                                                      'chatName': displayName,
+                                                      'chatAvatar': avatarUrl,
+                                                      'isGroup': false,
+                                                    },
+                                                  );
+                                                }
+                                              },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Call Button — respects voiceVideoCallsVisible
+                                    Expanded(
+                                      child: _buildActionButton(
+                                        icon: Icons.call,
+                                        label: 'Call',
+                                        gradient: voiceVideoCallsVisible
+                                            ? const [Color(0xFF10B981), Color(0xFF06B6D4)]
+                                            : [Colors.grey.shade700, Colors.grey.shade800],
+                                        onTap: isBlocked
+                                            ? () {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('Unblock user to call'),
+                                                    backgroundColor: Colors.orange,
+                                                  ),
+                                                );
+                                              }
+                                            : !voiceVideoCallsVisible
+                                                ? () {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text('This user does not accept calls'),
+                                                        backgroundColor: Colors.orange,
+                                                      ),
+                                                    );
+                                                  }
+                                                : () {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text('Call feature coming soon'),
+                                                      ),
+                                                    );
+                                                  },
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
 
-                          const SizedBox(height: 32),
+                              const SizedBox(height: 16),
 
-                          // Action Buttons Row
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 32),
-                            child: Row(
-                              children: [
-                                // Message Button
-                                Expanded(
-                                  child: _buildActionButton(
-                                    icon: Icons.message,
-                                    label: 'Message',
-                                    gradient: const [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
-                                    onTap: isBlocked
-                                        ? () {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('Unblock user to send messages'),
-                                                backgroundColor: Colors.orange,
-                                              ),
-                                            );
-                                          }
-                                        : () async {
-                                            final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                                            final chat = await chatProvider.startDirectChat(userId);
-                                            if (chat != null && mounted) {
-                                              Navigator.pushNamed(
-                                                context,
-                                                '/chat',
-                                                arguments: {
-                                                  'chatId': chat['id'],
-                                                  'chatName': displayName,
-                                                  'chatAvatar': avatarUrl,
-                                                  'isGroup': false,
-                                                },
-                                              );
-                                            }
-                                          },
-                                  ),
+                              // Secondary Actions
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 32),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildSecondaryButton(
+                                        icon: isContact ? Icons.person_remove : Icons.person_add,
+                                        label: isContact ? 'Remove' : 'Add Contact',
+                                        color: isContact ? Colors.orange : const Color(0xFF10B981),
+                                        isLoading: _isAddingContact,
+                                        onTap: () => _toggleContact(currentUserId, userId, isContact),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildSecondaryButton(
+                                        icon: isBlocked ? Icons.lock_open : Icons.block,
+                                        label: isBlocked ? 'Unblock' : 'Block',
+                                        color: isBlocked ? Colors.grey : Colors.red,
+                                        isLoading: _isBlocking,
+                                        onTap: () => _toggleBlock(currentUserId, userId, isBlocked, displayName),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 12),
-                                // Call Button
-                                Expanded(
-                                  child: _buildActionButton(
-                                    icon: Icons.call,
-                                    label: 'Call',
-                                    gradient: const [Color(0xFF10B981), Color(0xFF06B6D4)],
-                                    onTap: isBlocked
-                                        ? () {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('Unblock user to call'),
-                                                backgroundColor: Colors.orange,
-                                              ),
-                                            );
-                                          }
-                                        : () {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Call feature coming soon')),
-                                            );
-                                          },
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+
+                              const SizedBox(height: 32),
+                            ],
                           ),
-
-                          const SizedBox(height: 16),
-
-                          // Secondary Actions: Add Contact & Block
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 32),
-                            child: Row(
-                              children: [
-                                // Add/Remove Contact
-                                Expanded(
-                                  child: _buildSecondaryButton(
-                                    icon: isContact ? Icons.person_remove : Icons.person_add,
-                                    label: isContact ? 'Remove' : 'Add Contact',
-                                    color: isContact ? Colors.orange : const Color(0xFF10B981),
-                                    isLoading: _isAddingContact,
-                                    onTap: () => _toggleContact(currentUserId, userId, isContact),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Block/Unblock
-                                Expanded(
-                                  child: _buildSecondaryButton(
-                                    icon: isBlocked ? Icons.lock_open : Icons.block,
-                                    label: isBlocked ? 'Unblock' : 'Block',
-                                    color: isBlocked ? Colors.grey : Colors.red,
-                                    isLoading: _isBlocking,
-                                    onTap: () => _toggleBlock(currentUserId, userId, isBlocked, displayName),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 32),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 );
@@ -268,7 +339,15 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
-  /// Toggle block/unblock user
+  String _formatLastSeen(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
   Future<void> _toggleBlock(String currentUserId, String targetUserId, bool isBlocked, String displayName) async {
     setState(() => _isBlocking = true);
 
@@ -311,7 +390,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     }
   }
 
-  /// Toggle add/remove contact
   Future<void> _toggleContact(String currentUserId, String targetUserId, bool isContact) async {
     setState(() => _isAddingContact = true);
 
@@ -353,7 +431,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     }
   }
 
-  /// Report user dialog
   void _showReportDialog(BuildContext context, String? reportedUserId, String reportedDisplayName) {
     final reasonController = TextEditingController();
 
