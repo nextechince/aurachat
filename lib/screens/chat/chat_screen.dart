@@ -1663,6 +1663,7 @@ Future<void> _pickViewOnce() async {
 }
 
 void _showMessageOptions(Map<String, dynamic> m) {
+  final canForward = Provider.of<SettingsProvider>(context, listen: false).forwardedMessages;
   final isMe = m['sender_id'] == _currentUserId;
   final isDeleted = m['deleted_for_everyone'] == true;
   final isText = (m['media_type'] ?? 'text') == 'text';
@@ -1719,6 +1720,7 @@ void _showMessageOptions(Map<String, dynamic> m) {
                   Navigator.pop(context);
                   _setReply(m);
                 }),
+              if (canForward)
                 _sheetTile(Icons.share, 'Forward', () {
                   Navigator.pop(context);
                   _forwardMessage(m);
@@ -2347,6 +2349,15 @@ Future<void> _startCall(bool video) async {
         .showSnackBar(const SnackBar(content: Text('Unblock to call')));
     return;
   }
+  if (!_isGroup && !_isChannel && !_otherVoiceVideoCallsVisible) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('This user does not accept calls'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
   if (_otherUserId == null && !_isGroup) return;
   final channel = CallService.generateChannelName();
   if (!mounted) return;
@@ -2379,6 +2390,7 @@ void dispose() {
   _chatSubscription?.cancel();
   _typingSubscription?.cancel();
   _statusSubscription?.cancel();
+  _otherSettingsSubscription?.cancel();
   _liveSub?.cancel();
   _liveTimer?.cancel();
   for (final s in _blockUnsub) {
