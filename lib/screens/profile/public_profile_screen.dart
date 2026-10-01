@@ -79,7 +79,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 final email = liveData?['email'] as String?;
                 final bio = liveData?['bio'] as String? ?? args?['bio'] as String?;
 
-                // 🔽 NEW: watch the other user's privacy settings
+                // Watch the other user's privacy settings
                 return StreamBuilder<DocumentSnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('user_settings')
@@ -89,7 +89,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     final settingsData =
                         settingsSnapshot.data?.data() as Map<String, dynamic>?;
 
-                    // Default to visible if no settings doc exists yet
                     final profilePhotoVisible =
                         settingsData?['profile_photo_visible'] as bool? ?? true;
                     final phoneNumberVisible =
@@ -103,12 +102,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     final avatarUrl = profilePhotoVisible ? rawAvatarUrl : null;
 
                     // Hide phone number unless they allow it
-                    final phoneNumber =
-                        phoneNumberVisible ? liveData?['phone_number'] as String? : null;
+                    final phoneNumber = phoneNumberVisible
+                        ? (liveData?['phone_number'] as String?)
+                        : null;
 
-                    // Last seen (if you render it anywhere, gate it here)
+                    // Last seen (only if visible)
                     final lastSeen = lastSeenVisible
-                        ? liveData?['last_seen'] as Timestamp?
+                        ? (liveData?['last_seen'] as Timestamp?)
                         : null;
 
                     return StreamBuilder<DocumentSnapshot>(
