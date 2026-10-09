@@ -99,7 +99,7 @@ class AuraAuthProvider extends ChangeNotifier {
     }
   }
 
-  /// ==================== CHECK IF EMAIL EXISTS (NEW) ====================
+  /// ==================== CHECK IF EMAIL EXISTS ====================
   Future<Map<String, dynamic>?> checkEmailExists(String email) async {
     try {
       final snapshot = await _firestore
@@ -141,7 +141,7 @@ class AuraAuthProvider extends ChangeNotifier {
     }
   }
 
-  /// ==================== SAVE PENDING USER DATA (NEW - EMAIL FIRST) ====================
+  /// ==================== SAVE PENDING USER DATA ====================
   Future<void> savePendingUserData({
     required String userId,
     required String email,
@@ -172,13 +172,11 @@ class AuraAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ==================== SET MOCK EMAIL (NEW) ====================
   void setMockEmail(String email) {
     _email = email;
     notifyListeners();
   }
 
-  /// ==================== SET MOCK USER ID (NEW) ====================
   void setMockUserId(String userId) {
     _mockUserId = userId;
     notifyListeners();
@@ -230,7 +228,6 @@ class AuraAuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Complete login after email verification
   Future<void> _completeLogin(SharedPreferences prefs) async {
     _isAuthenticated = true;
 
@@ -339,7 +336,7 @@ class AuraAuthProvider extends ChangeNotifier {
     }
   }
 
-  /// ==================== COMPLETE EMAIL VERIFICATION (BACKEND) ====================
+  /// ==================== COMPLETE EMAIL VERIFICATION ====================
   Future<bool> completeEmailVerification(String userId) async {
     _setLoading(true);
     try {
@@ -858,3 +855,6 @@ class AuraAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+/// Rebrand alias — keeps old name working under new brand
+typedef LumaAuthProvider = AuraAuthProvider;
