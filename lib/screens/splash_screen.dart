@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../providers/auth_provider.dart' show AuraAuthProvider;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,9 +14,8 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _glowAnimation;
+  late Animation<double> _fade;
+  late Animation<double> _scale;
   bool _hasNavigated = false;
 
   @override
@@ -27,167 +24,152 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 900),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+    _scale = Tween<double>(begin: 0.85, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.7, curve: Curves.easeOutBack),
-      ),
-    );
-
-    _glowAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeInOut),
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
       ),
     );
 
     _controller.forward();
-
-    // FIXED: If this screen is opened directly (not via AuthRouter),
-    // it will self-navigate after animation. AuthRouter handles the normal flow.
     _selfNavigateIfNeeded();
   }
 
-  /// FIXED: Safe fallback navigation if splash is opened directly.
-  /// Normal flow: AuthRouter shows splash for 2.5s then routes.
-  /// Fallback: If splash is still showing after 4s, navigate based on auth state.
   Future<void> _selfNavigateIfNeeded() async {
-    await Future.delayed(const Duration(seconds: 4));
+    await Future.delayed(const Duration(seconds: 3));
     if (!mounted || _hasNavigated) return;
+    _hasNavigated = true;
 
     final prefs = await SharedPreferences.getInstance();
-    final mockUserId = prefs.getString('mock_user_id');
+    final pendingPhone = prefs.getString('pending_phone');
+    final pendingEmail = prefs.getString('pending_email');
     final currentUser = FirebaseAuth.instance.currentUser;
 
-    if (currentUser != null || mockUserId != null) {
-      final userId = currentUser?.uid ?? mockUserId!;
+    // Signed-in Firebase user → main or setup
+    if (currentUser != null) {
       try {
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-        final data = userDoc.data();
-        final hasUsername = data?['username'] != null && (data?['username'] as String).trim().isNotEmpty;
-        final hasDisplayName = data?['display_name'] != null && (data?['display_name'] as String).trim().isNotEmpty;
-        final createdAt = data?['created_at'];
-        final hasProfile = userDoc.exists && hasUsername && hasDisplayName && createdAt != null;
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        final data = doc.data();
+        final hasUsername = (data?['username'] as String?)?.trim().isNotEmpty ?? false;
+        final hasName = (data?['display_name'] as String?)?.trim().isNotEmpty ?? false;
 
-        if (hasProfile) {
+        if (doc.exists && hasUsername && hasName) {
           Navigator.pushReplacementNamed(context, '/main');
         } else {
           Navigator.pushReplacementNamed(context, '/setup_profile');
         }
-      } catch (e) {
+      } catch (_) {
         Navigator.pushReplacementNamed(context, '/setup_profile');
       }
-    } else {
-      Navigator.pushReplacementNamed(context, '/');
+      return;
     }
-    _hasNavigated = true;
+
+    // No user — check pending flow
+    if (pendingPhone == null) {
+      Navigator.pushReplacementNamed(context, '/phone_entry');
+      return;
+    }
+    Navigator.pushReplacementNamed(context, '/email_verification');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Telegram-style: solid bg, centered logo, app name, subtle tagline
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0F),
+      backgroundColor: isDark
+          ? const Color(0xFF212121)
+          : const Color(0xFFFFFFFF),
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,
-          builder: (context, child) {
+          builder: (context, _) {
             return Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo with glow effect
-                Transform.scale(
-                  scale: _scaleAnimation.value,
+                // ── Logo (flat blue rounded square — Telegram style) ──
+                ScaleTransition(
+                  scale: _scale,
                   child: FadeTransition(
-                    opacity: _fadeAnimation,
+                    opacity: _fade,
                     child: Container(
-                      width: 140,
-                      height: 140,
+                      width: 112,
+                      height: 112,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF8B5CF6).withOpacity(
-                              0.3 * _glowAnimation.value,
-                            ),
-                            blurRadius: 60 * _glowAnimation.value,
-                            spreadRadius: 20 * _glowAnimation.value,
-                          ),
-                          BoxShadow(
-                            color: const Color(0xFF06B6D4).withOpacity(
-                              0.2 * _glowAnimation.value,
-                            ),
-                            blurRadius: 40 * _glowAnimation.value,
-                            spreadRadius: 10 * _glowAnimation.value,
-                          ),
-                        ],
+                        color: theme.colorScheme.primary,
+                        borderRadius: BorderRadius.circular(32),
                       ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          fit: BoxFit.cover,
+                      child: const Center(
+                        child: Icon(
+                          Icons.chat_bubble_rounded,
+                          color: Colors.white,
+                          size: 56,
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
-                // App name with gradient
+
+                const SizedBox(height: 32),
+
+                // ── App name ──
                 FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
-                      colors: [
-                        Color(0xFF8B5CF6), // Purple
-                        Color(0xFF06B6D4), // Cyan
-                      ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ).createShader(bounds),
-                    child: const Text(
-                      'AURA',
-                      style: TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 12,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FadeTransition(
-                  opacity: _fadeAnimation,
+                  opacity: _fade,
                   child: Text(
-                    'CHAT',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 8,
-                      color: Colors.white.withOpacity(0.5),
+                    'Luma Chat',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ),
-                const SizedBox(height: 60),
-                // Loading indicator
+
+                const SizedBox(height: 8),
+
+                // ── Tagline (Telegram style — small, muted) ──
                 FadeTransition(
-                  opacity: _fadeAnimation,
+                  opacity: _fade,
+                  child: Text(
+                    'Fast. Simple. Secure.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 64),
+
+                // ── Subtle loading bar (much softer than a spinner) ──
+                FadeTransition(
+                  opacity: _fade,
                   child: SizedBox(
-                    width: 40,
-                    height: 40,
+                    width: 32,
+                    height: 32,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
+                      strokeWidth: 2.2,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        const Color(0xFF8B5CF6).withOpacity(0.8),
+                        theme.colorScheme.primary.withOpacity(0.7),
                       ),
                     ),
                   ),
@@ -198,11 +180,5 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 }
