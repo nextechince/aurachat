@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart' show LumaAuthProvider;
 import '../../providers/chat_provider.dart';
-import '../../services/call_service.dart';
 
 class MainAppScreen extends StatefulWidget {
   const MainAppScreen({super.key});
@@ -18,15 +16,12 @@ class MainAppScreen extends StatefulWidget {
 
 class _MainAppScreenState extends State<MainAppScreen> {
   int _bottomIndex = 0;
-
-  // Folder pills — 0 = All, 1 = Unread, 2 = Groups, 3 = Channels, 4 = Bots
   int _folderIndex = 0;
 
   final Map<String, Map<String, dynamic>> _userCache = {};
   final Set<String> _inFlight = {};
   List<String> _myBlockedUsers = [];
 
-  // Scroll controller for folder pills
   final ScrollController _folderScroll = ScrollController();
 
   @override
@@ -145,7 +140,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // BUILD — Scaffold with tabs + bottom nav
+  // BUILD
   // ═══════════════════════════════════════════════════════════════════════
 
   @override
@@ -175,7 +170,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // BOTTOM NAV — Chats / Contacts / Status / Settings (Telegram style)
+  // BOTTOM NAV
   // ═══════════════════════════════════════════════════════════════════════
 
   Widget _buildBottomNav() {
@@ -239,7 +234,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // FAB — Telegram blue circle, changes per tab
+  // FAB
   // ═══════════════════════════════════════════════════════════════════════
 
   Widget? _buildFAB() {
@@ -276,12 +271,10 @@ class _MainAppScreenState extends State<MainAppScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // CHATS TAB — app bar + folder pills + list
+  // CHATS TAB
   // ═══════════════════════════════════════════════════════════════════════
 
   Widget _buildChatsTab() {
-    final theme = Theme.of(context);
-
     return SafeArea(
       bottom: false,
       child: Column(
@@ -303,7 +296,6 @@ class _MainAppScreenState extends State<MainAppScreen> {
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
       child: Row(
         children: [
-          // Profile avatar on left (Telegram style)
           GestureDetector(
             onTap: () => Navigator.pushNamed(context, '/profile'),
             child: CircleAvatar(
@@ -319,8 +311,6 @@ class _MainAppScreenState extends State<MainAppScreen> {
             ),
           ),
           const SizedBox(width: 12),
-
-          // Title
           Expanded(
             child: Text(
               'Luma Chat',
@@ -330,14 +320,10 @@ class _MainAppScreenState extends State<MainAppScreen> {
               ),
             ),
           ),
-
-          // Search
           IconButton(
             icon: Icon(Icons.search, color: theme.colorScheme.onSurface),
             onPressed: () => Navigator.pushNamed(context, '/global_search'),
           ),
-
-          // ⋮ menu
           IconButton(
             icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurface),
             onPressed: () => _showMenu(context),
@@ -347,22 +333,19 @@ class _MainAppScreenState extends State<MainAppScreen> {
     );
   }
 
-  // ─── Folder pills row (All Chats / Unread / Groups / Channels / Bots) ───
-
+  // ─── Folder pills ───
   Widget _buildFolderPills() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Compute counts
     final chats = context.watch<ChatProvider>().chats;
     final myUid = _myUid;
 
     final counts = <int, int>{
       0: chats.length,
       1: chats.where((c) {
-        final unread =
-            (c['unread_counts'] as Map<String, dynamic>?)?[myUid] as num?;
-        return (unread?.toInt() ?? 0) > 0;
+        final unread = (c['unread_count'] as num?)?.toInt() ?? 0;
+        return unread > 0;
       }).length,
       2: chats.where((c) => c['type'] == 'group').length,
       3: chats.where((c) => c['type'] == 'channel').length,
@@ -446,8 +429,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
     );
   }
 
-  // ─── Chat list with filtering by folder ───
-
+  // ─── Chat list ───
   Widget _buildChatsList() {
     final theme = Theme.of(context);
 
@@ -459,23 +441,17 @@ class _MainAppScreenState extends State<MainAppScreen> {
           );
         }
 
-        final myUid = _myUid;
         final allChats = chatProvider.chats;
 
         // Filter by folder
         List<Map<String, dynamic>> visible = allChats.where((c) {
-          // Filter archived out of main list
-          final archivedFor = List<String>.from(c['archived_for'] ?? []);
-          if (archivedFor.contains(myUid)) return false;
-
           final type = c['type'] as String? ?? 'direct';
           switch (_folderIndex) {
             case 0:
               return true;
             case 1:
-              final unread =
-                  (c['unread_counts'] as Map<String, dynamic>?)?[myUid] as num?;
-              return (unread?.toInt() ?? 0) > 0;
+              final unread = (c['unread_count'] as num?)?.toInt() ?? 0;
+              return unread > 0;
             case 2:
               return type == 'group';
             case 3:
@@ -486,9 +462,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
           return true;
         }).toList();
 
-        if (visible.isEmpty) {
-          return _buildEmptyState();
-        }
+        if (visible.isEmpty) return _buildEmptyState();
 
         return ListView.builder(
           padding: const EdgeInsets.only(top: 4, bottom: 96),
@@ -542,8 +516,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
     );
   }
 
-  // ─── Telegram-exact chat tile ───
-
+  // ─── Chat tile ───
   Widget _buildChatTile(Map<String, dynamic> chat) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -582,16 +555,25 @@ class _MainAppScreenState extends State<MainAppScreen> {
     }
 
     final lastMessage = chat['last_message'] ?? '';
-    final unreadCounts = chat['unread_counts'] as Map<String, dynamic>?;
-    final unread = (unreadCounts?[myUid] as num?)?.toInt() ?? 0;
 
+    // FIX: read int unread_count written by ChatProvider
+    final unread = (chat['unread_count'] as num?)?.toInt() ?? 0;
+
+    // FIX: read fields ChatProvider actually writes
+    final isPinned = chat['is_pinned'] == true;
+    final participantsData =
+        chat['participants_data'] as Map<String, dynamic>? ?? {};
+    final myData = participantsData[myUid] as Map<String, dynamic>? ?? {};
+    final isArchived = myData['is_archived'] == true;
+
+    // Mute: ChatProvider doesn't track this yet, default false
     final mutedFor = List<String>.from(chat['muted_for'] ?? []);
     final isMuted = mutedFor.contains(myUid);
+
     final isBlockedByMe = isDirect &&
         otherUserId != null &&
         otherUserId.isNotEmpty &&
         _myBlockedUsers.contains(otherUserId);
-    final isPinned = List<String>.from(chat['pinned_for'] ?? []).contains(myUid);
 
     final route = isBot ? '/bot' : (isChannel ? '/channel' : '/chat');
     final routeArgs = isBot
@@ -606,7 +588,6 @@ class _MainAppScreenState extends State<MainAppScreen> {
                 'otherUserId': otherUserId,
               };
 
-    // Detect sticker message
     final isSticker = lastMessage.toString().toLowerCase().contains('sticker');
     final previewText = isBlockedByMe
         ? 'Blocked'
@@ -627,14 +608,13 @@ class _MainAppScreenState extends State<MainAppScreen> {
         isPinned: isPinned,
         isMuted: isMuted,
         isBlockedByMe: isBlockedByMe,
+        isArchived: isArchived,
         name: name,
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Avatar with verified badge
             Stack(
               children: [
                 CircleAvatar(
@@ -679,8 +659,6 @@ class _MainAppScreenState extends State<MainAppScreen> {
               ],
             ),
             const SizedBox(width: 12),
-
-            // Name + message
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -701,19 +679,15 @@ class _MainAppScreenState extends State<MainAppScreen> {
                       ),
                       if (isMuted) ...[
                         const SizedBox(width: 4),
-                        Icon(
-                          Icons.notifications_off,
-                          size: 14,
-                          color: theme.colorScheme.onSurface.withOpacity(0.4),
-                        ),
+                        Icon(Icons.notifications_off,
+                            size: 14,
+                            color: theme.colorScheme.onSurface.withOpacity(0.4)),
                       ],
                       if (isPinned) ...[
                         const SizedBox(width: 4),
-                        Icon(
-                          Icons.push_pin,
-                          size: 14,
-                          color: theme.colorScheme.onSurface.withOpacity(0.4),
-                        ),
+                        Icon(Icons.push_pin,
+                            size: 14,
+                            color: theme.colorScheme.onSurface.withOpacity(0.4)),
                       ],
                     ],
                   ),
@@ -735,41 +709,25 @@ class _MainAppScreenState extends State<MainAppScreen> {
               ),
             ),
             const SizedBox(width: 8),
-
-            // Time + ticks + unread badge
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    if (!isDirect && !isChannel) ...[
-                      Icon(
-                        Icons.done_all,
-                        size: 16,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 2),
-                    ],
-                    Text(
-                      _formatChatTime(chat['last_message_at']),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: unread > 0
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface.withOpacity(0.4),
-                        fontWeight:
-                            unread > 0 ? FontWeight.w500 : FontWeight.normal,
-                      ),
-                    ),
-                  ],
+                Text(
+                  _formatChatTime(chat['last_message_at']),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: unread > 0
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface.withOpacity(0.4),
+                    fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.normal,
+                  ),
                 ),
                 if (unread > 0) ...[
                   const SizedBox(height: 4),
                   Container(
                     constraints: const BoxConstraints(minWidth: 22),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary,
                       borderRadius: BorderRadius.circular(11),
@@ -794,7 +752,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // FLOATING CONTEXT MENU (Telegram style — appears near finger)
+  // FLOATING CONTEXT MENU
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<void> _showChatContextMenu({
@@ -808,27 +766,22 @@ class _MainAppScreenState extends State<MainAppScreen> {
     required bool isPinned,
     required bool isMuted,
     required bool isBlockedByMe,
+    required bool isArchived,
     required String name,
   }) async {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final box = context.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (box == null || overlay == null) return;
 
     final position = RelativeRect.fromRect(
       Rect.fromPoints(
         box.localToGlobal(Offset.zero, ancestor: overlay),
-        box.localToGlobal(box.size.bottomRight(Offset.zero),
-            ancestor: overlay),
+        box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
       ),
       Offset.zero & overlay.size,
     );
-
-    final myUid = _myUid;
-    final archivedFor = List<String>.from(chat['archived_for'] ?? []);
-    final isArchived = archivedFor.contains(myUid);
 
     final selected = await showMenu<String>(
       context: context,
@@ -912,32 +865,42 @@ class _MainAppScreenState extends State<MainAppScreen> {
 
     if (!mounted || selected == null) return;
 
+    final provider = context.read<ChatProvider>();
+
     switch (selected) {
       case 'pin':
-        await _togglePin(chatId, myUid, !isPinned);
+        await provider.togglePinChat(chatId);
         break;
       case 'mute':
-        await _toggleMute(chatId, myUid, !isMuted);
+        await _toggleMute(chatId, !isMuted);
         break;
       case 'read':
-        await _markAsRead(chatId, myUid);
+        await provider.markMessagesAsRead(chatId);
         break;
       case 'block':
         if (otherUserId != null && otherUserId.isNotEmpty) {
-          await _toggleBlock(otherUserId, !isBlockedByMe);
+          if (isBlockedByMe) {
+            await provider.unblockUser(otherUserId);
+          } else {
+            await provider.blockUser(otherUserId);
+          }
         }
         break;
       case 'archive':
-        await _toggleArchive(chatId, myUid, !isArchived);
+        if (isArchived) {
+          await provider.unarchiveChat(chatId);
+        } else {
+          await provider.archiveChat(chatId);
+        }
         break;
       case 'clear':
-        await _confirmClearMessages(chatId, myUid);
+        await _confirmClearMessages(chatId);
         break;
       case 'leave':
-        await _confirmExitGroup(chatId, myUid, isChannel);
+        await _confirmExitGroup(chatId, isChannel);
         break;
       case 'delete':
-        await _confirmDeleteChat(chatId, myUid);
+        await provider.deleteChat(chatId);
         break;
     }
   }
@@ -959,72 +922,28 @@ class _MainAppScreenState extends State<MainAppScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // FIRESTORE ACTIONS
+  // ACTIONS
   // ═══════════════════════════════════════════════════════════════════════
 
-  Future<void> _togglePin(String chatId, String myUid, bool pin) async {
+  Future<void> _toggleMute(String chatId, bool mute) async {
+    final myUid = _myUid;
     try {
       await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
-        'pinned_for':
-            pin ? FieldValue.arrayUnion([myUid]) : FieldValue.arrayRemove([myUid]),
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(pin ? 'Pinned' : 'Unpinned')),
-        );
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _toggleMute(String chatId, String myUid, bool mute) async {
-    try {
-      await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
-        'muted_for':
-            mute ? FieldValue.arrayUnion([myUid]) : FieldValue.arrayRemove([myUid]),
+        'muted_for': mute
+            ? FieldValue.arrayUnion([myUid])
+            : FieldValue.arrayRemove([myUid]),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(mute ? 'Muted' : 'Unmuted')),
         );
+        context.read<ChatProvider>().loadChats();
       }
     } catch (_) {}
   }
 
-  Future<void> _markAsRead(String chatId, String myUid) async {
-    try {
-      await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
-        'unread_counts.$myUid': 0,
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _toggleBlock(String otherUserId, bool block) async {
+  Future<void> _confirmClearMessages(String chatId) async {
     final myUid = _myUid;
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(myUid).update({
-        'blocked_users': block
-            ? FieldValue.arrayUnion([otherUserId])
-            : FieldValue.arrayRemove([otherUserId]),
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(block ? 'Blocked' : 'Unblocked')),
-        );
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _toggleArchive(String chatId, String myUid, bool archive) async {
-    try {
-      await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
-        'archived_for': archive
-            ? FieldValue.arrayUnion([myUid])
-            : FieldValue.arrayRemove([myUid]),
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _confirmClearMessages(String chatId, String myUid) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1048,31 +967,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
     } catch (_) {}
   }
 
-  Future<void> _confirmDeleteChat(String chatId, String myUid) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete chat?'),
-        content: const Text('This removes the chat from your list.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
-        'deleted_for': FieldValue.arrayUnion([myUid]),
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _confirmExitGroup(String chatId, String myUid, bool isChannel) async {
+  Future<void> _confirmExitGroup(String chatId, bool isChannel) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1092,14 +987,12 @@ class _MainAppScreenState extends State<MainAppScreen> {
     );
     if (ok != true) return;
     try {
-      await FirebaseFirestore.instance.collection('chats').doc(chatId).update({
-        'participants': FieldValue.arrayRemove([myUid]),
-      });
+      await context.read<ChatProvider>().leaveChat(chatId);
     } catch (_) {}
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // SHEETS — new chat / menu / status / calls
+  // SHEETS
   // ═══════════════════════════════════════════════════════════════════════
 
   void _showNewChatOptions(BuildContext context) {
@@ -1175,7 +1068,8 @@ class _MainAppScreenState extends State<MainAppScreen> {
     );
   }
 
-  void _showFlatSheet({required BuildContext context, required List<Widget> children}) {
+  void _showFlatSheet(
+      {required BuildContext context, required List<Widget> children}) {
     final theme = Theme.of(context);
     showModalBottomSheet(
       context: context,
@@ -1265,15 +1159,14 @@ class _MainAppScreenState extends State<MainAppScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
-                Text(
-                  'Contacts',
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
+                Text('Contacts',
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.search),
-                  onPressed: () => Navigator.pushNamed(context, '/global_search'),
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/global_search'),
                 ),
               ],
             ),
@@ -1301,15 +1194,9 @@ class _MainAppScreenState extends State<MainAppScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                Text(
-                  'Status',
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
+            child: Text('Status',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w600)),
           ),
           Expanded(
             child: Center(
@@ -1371,7 +1258,8 @@ class _MainAppScreenState extends State<MainAppScreen> {
             leading: const Icon(Icons.notifications_outlined),
             title: const Text('Notifications'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.pushNamed(context, '/notifications_settings'),
+            onTap: () =>
+                Navigator.pushNamed(context, '/notifications_settings'),
           ),
           const Divider(height: 0.5),
           ListTile(
@@ -1379,7 +1267,8 @@ class _MainAppScreenState extends State<MainAppScreen> {
             title: Text('Log out',
                 style: TextStyle(color: theme.colorScheme.error)),
             onTap: () async {
-              final auth = Provider.of<LumaAuthProvider>(context, listen: false);
+              final auth =
+                  Provider.of<LumaAuthProvider>(context, listen: false);
               await auth.signOut();
               if (!context.mounted) return;
               Navigator.pushNamedAndRemoveUntil(context, '/', (r) => false);
@@ -1391,10 +1280,6 @@ class _MainAppScreenState extends State<MainAppScreen> {
     );
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════════════
 
 class _NavItem {
   final IconData icon;
