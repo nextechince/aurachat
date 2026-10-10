@@ -36,6 +36,26 @@ class AuraAuthProvider extends ChangeNotifier {
 
   String? get currentUserId => _user?.uid ?? _mockUserId;
 
+  // ─── Aliases for newer UI screens ───
+  String? get currentEmail => _email;
+
+  Map<String, dynamic>? get profile {
+    if (_userName == null &&
+        _displayName == null &&
+        _userPhotoUrl == null &&
+        _email == null) {
+      return null;
+    }
+    return {
+      'username': _userName,
+      'display_name': _displayName,
+      'avatar_url': _userPhotoUrl,
+      'bio': _userBio,
+      'email': _email,
+      'phone': _phoneNumber,
+    };
+  }
+
   set mockUserId(String? value) {
     _mockUserId = value;
     notifyListeners();
@@ -183,7 +203,8 @@ class AuraAuthProvider extends ChangeNotifier {
   }
 
   /// ==================== LOGIN EXISTING USER ====================
-  Future<bool> loginExistingUser(String phone, {Map<String, dynamic>? userData}) async {
+  Future<bool> loginExistingUser(String phone,
+      {Map<String, dynamic>? userData}) async {
     _setLoading(true);
     try {
       final data = userData ?? await checkPhoneExists(phone);
@@ -267,7 +288,9 @@ class AuraAuthProvider extends ChangeNotifier {
         return false;
       }
 
-      final otp = (100000 + DateTime.now().millisecond * 900000 ~/ 1000).toString().padLeft(6, '0');
+      final otp = (100000 + DateTime.now().millisecond * 900000 ~/ 1000)
+          .toString()
+          .padLeft(6, '0');
       final expiry = DateTime.now().add(const Duration(minutes: 10));
 
       final prefs = await SharedPreferences.getInstance();
@@ -426,7 +449,8 @@ class AuraAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> signUpWithEmail(String email, String password, String phone) async {
+  Future<bool> signUpWithEmail(
+      String email, String password, String phone) async {
     _setLoading(true);
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
@@ -472,7 +496,8 @@ class AuraAuthProvider extends ChangeNotifier {
     try {
       await _auth.verifyPhoneNumber(
         phoneNumber: phone,
-        verificationCompleted: (firebase_auth.PhoneAuthCredential credential) async {
+        verificationCompleted:
+            (firebase_auth.PhoneAuthCredential credential) async {
           await _auth.signInWithCredential(credential);
         },
         verificationFailed: (firebase_auth.FirebaseAuthException e) {
@@ -540,7 +565,8 @@ class AuraAuthProvider extends ChangeNotifier {
         _userName = data['username'] as String?;
         _displayName = data['display_name'] as String?;
         _userBio = data['bio'] as String?;
-        _userPhotoUrl = data['avatar_base64'] as String? ?? data['avatar_url'] as String?;
+        _userPhotoUrl =
+            data['avatar_base64'] as String? ?? data['avatar_url'] as String?;
         _phoneNumber = data['phone'] as String? ?? _phoneNumber;
         _email = data['email'] as String? ?? _email;
         notifyListeners();
@@ -587,7 +613,8 @@ class AuraAuthProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
     try {
-      final userId = currentUserId ?? 'mock_${DateTime.now().millisecondsSinceEpoch}';
+      final userId =
+          currentUserId ?? 'mock_${DateTime.now().millisecondsSinceEpoch}';
 
       if (_user == null && _mockUserId == null) {
         _mockUserId = userId;
@@ -667,7 +694,8 @@ class AuraAuthProvider extends ChangeNotifier {
 
       final prefs = await SharedPreferences.getInstance();
       if (username != null) await prefs.setString('mock_username', username);
-      if (displayName != null) await prefs.setString('mock_display_name', displayName);
+      if (displayName != null)
+        await prefs.setString('mock_display_name', displayName);
       if (bio != null) await prefs.setString('mock_bio', bio);
       if (photoUrl != null) await prefs.setString('mock_avatar', photoUrl);
 
@@ -806,28 +834,60 @@ class AuraAuthProvider extends ChangeNotifier {
         return false;
       }
 
-      await _firestore.collection('messages').where('sender_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('messages')
+          .where('sender_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
-      await _firestore.collection('chat_participants').where('user_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('chat_participants')
+          .where('user_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
-      await _firestore.collection('user_settings').where('user_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('user_settings')
+          .where('user_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
-      await _firestore.collection('status_views').where('user_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('status_views')
+          .where('user_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
-      await _firestore.collection('statuses').where('user_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('statuses')
+          .where('user_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
-      await _firestore.collection('contacts').where('user_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('contacts')
+          .where('user_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
-      await _firestore.collection('blocked_users').where('user_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('blocked_users')
+          .where('user_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
-      await _firestore.collection('bots').where('creator_id', isEqualTo: userId).get().then((snapshot) {
+      await _firestore
+          .collection('bots')
+          .where('creator_id', isEqualTo: userId)
+          .get()
+          .then((snapshot) {
         for (var doc in snapshot.docs) doc.reference.delete();
       });
       await _firestore.collection('users').doc(userId).delete();
